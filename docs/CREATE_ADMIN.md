@@ -30,7 +30,7 @@ chmod +x create-admin.sh
 ### Step 1: Register user via API
 
 ```bash
-curl -X POST http://localhost:8001/api/auth/register \
+curl -X POST http://localhost:8001/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",
@@ -98,12 +98,12 @@ After running the script, you can login with the credentials you provided.
 Once created, test login at:
 
 - **Admin Panel**: http://localhost:3001
-- **API Endpoint**: http://localhost:8001/api/auth/login
+- **API Endpoint**: http://localhost:8001/api/v1/login
 
 Example login request:
 
 ```bash
-curl -X POST http://localhost:8001/api/auth/login \
+curl -X POST http://localhost:8001/api/v1/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",

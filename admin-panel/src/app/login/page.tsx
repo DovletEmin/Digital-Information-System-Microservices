@@ -6,7 +6,7 @@ import api from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,12 +17,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data } = await api.post('/auth/login', {
-        email,
+      const { data } = await api.post('/api/v1/login', {
+        username: username,
         password,
       });
 
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('token', data.access_token);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
@@ -48,12 +48,12 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Email
+                Username
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
               />
