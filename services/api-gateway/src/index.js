@@ -46,9 +46,14 @@ app.use('/api/v1/auth', createProxyMiddleware({
   target: services.auth,
   pathRewrite: { '^/api/v1/auth': '/api/v1' },
   changeOrigin: true,
+  timeout: 30000,
+  proxyTimeout: 30000,
   onError: (err, req, res) => {
     logger.error('Auth service error:', err.message);
     res.status(503).json({ error: 'Auth service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.auth}`);
   }
 }));
 
