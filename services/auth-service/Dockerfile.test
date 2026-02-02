@@ -15,5 +15,5 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Run tests with CGO explicitly enabled
-CMD ["sh", "-c", "CGO_ENABLED=1 go test ./... -v -cover"]
+# Run tests with CGO explicitly enabled and proper build tags for Alpine
+CMD ["sh", "-c", "CGO_ENABLED=1 go test -tags='sqlite_omit_load_extension' ./... -v -cover"]
