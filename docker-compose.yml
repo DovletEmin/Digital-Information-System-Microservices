@@ -306,6 +306,8 @@ services:
     build:
       context: ./admin-panel
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://192.168.55.154:3000
     container_name: smu-admin-panel
     ports:
       - "3001:3001"
