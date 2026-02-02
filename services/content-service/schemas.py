@@ -63,10 +63,20 @@ class BookCategoryCreate(BookCategoryBase):
 class BookCategoryResponse(BookCategoryBase):
     id: int
     
-    class ConOptional[str] = None
-    epub_file: Optional[str] = None
-    cover_image: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class BookBase(BaseModel):
+    title: str = Field(..., max_length=500)
+    author: str = Field(..., max_length=255)
+    publisher: Optional[str] = None
+    isbn: Optional[str] = None
+    publication_date: Optional[datetime] = None
+    pages: Optional[int] = None
+    description: Optional[str] = None
     language: str = "tm"
+    cover_image: Optional[str] = None
+    file_url: Optional[str] = None
 
 class BookCreate(BookBase):
     category_ids: Optional[List[int]] = []
@@ -74,19 +84,13 @@ class BookCreate(BookBase):
 class BookUpdate(BookBase):
     title: Optional[str] = None
     author: Optional[str] = None
-    content: Optional[str] = None
+    description: Optional[str] = None
     category_ids: Optional[List[int]] = None
 
 class BookResponse(BookBase):
     id: int
     views: int
-    rating: floal[str] = None
-    content: Optional[str] = None
-    category_ids: Optional[List[int]] = None
-
-class BookResponse(BookBase):
-    id: int
-    views_count: int
+    rating: float
     average_rating: float
     rating_count: int
     categories: List[BookCategoryResponse]
@@ -117,10 +121,11 @@ class DissertationBase(BaseModel):
     abstract: str
     supervisor: Optional[str] = None
     university: Optional[str] = None
-    author_workplace: Optional[str] = None
-    content: str
+    department: Optional[str] = None
+    degree_type: Optional[str] = None
     language: str = "tm"
     publication_date: Optional[datetime] = None
+    file_url: Optional[str] = None
 
 class DissertationCreate(DissertationBase):
     category_ids: Optional[List[int]] = []
@@ -134,7 +139,11 @@ class DissertationUpdate(DissertationBase):
 class DissertationResponse(DissertationBase):
     id: int
     views: int
-    rating: floaetime
+    rating: float
+    average_rating: float
+    rating_count: int
+    categories: List[DissertationCategoryResponse]
+    created_at: datetime
     updated_at: datetime
     
     class Config:
