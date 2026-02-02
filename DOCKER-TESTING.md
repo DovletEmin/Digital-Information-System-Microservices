@@ -1,5 +1,21 @@
 # Docker Testing Quick Reference
 
+## ⚠️ ВАЖНО: Синтаксис команд Docker Compose
+
+```bash
+# ПРАВИЛЬНО (обратите внимание на флаг -f):
+docker-compose -f docker-compose.test.yml build test-auth-service
+docker-compose -f docker-compose.test.yml run --rm test-auth-service
+
+# ИЛИ (новая версия Docker Compose v2):
+docker compose -f docker-compose.test.yml build test-auth-service
+docker compose -f docker-compose.test.yml run --rm test-auth-service
+
+# НЕПРАВИЛЬНО:
+docker-compose.test.yml build test-auth-service  ❌
+docker compose.test.yml build test-auth-service   ❌
+```
+
 ## Запуск всех тестов в Docker
 
 ### PowerShell (Windows):
@@ -24,29 +40,30 @@ make -f Makefile.test test
 
 ### Auth Service (Go):
 
-```powershell
-# PowerShell
-.\scripts\test-docker.ps1 auth-service
+```bash
+# Через скрипты (рекомендуется)
+./scripts/test-docker.sh auth-service
 
 # Makefile
 make -f Makefile.test test-auth
 
-# Напрямую через docker-compose
+# Напрямую через docker-compose (используйте -f!)
+docker-compose -f docker-compose.test.yml build test-auth-service
 docker-compose -f docker-compose.test.yml run --rm test-auth-service
 ```
 
 ### Content Service (Python):
 
-```powershell
-.\scripts\test-docker.ps1 content-service
+```bash
+./scripts/test-docker.sh content-service
 make -f Makefile.test test-content
 docker-compose -f docker-compose.test.yml run --rm test-content-service
 ```
 
 ### API Gateway (Node.js):
 
-```powershell
-.\scripts\test-docker.ps1 api-gateway
+```bash
+./scripts/test-docker.sh api-gateway
 make -f Makefile.test test-gateway
 docker-compose -f docker-compose.test.yml run --rm test-api-gateway
 ```

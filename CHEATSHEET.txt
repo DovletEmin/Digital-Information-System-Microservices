@@ -1,0 +1,87 @@
+┌─────────────────────────────────────────────────────────────┐
+│         DOCKER TESTING - ШПАРГАЛКА КОМАНД                   │
+└─────────────────────────────────────────────────────────────┘
+
+📦 СОБРАТЬ ОБРАЗЫ:
+  docker-compose -f docker-compose.test.yml build
+  docker-compose -f docker-compose.test.yml build test-auth-service
+
+🧪 ЗАПУСТИТЬ ТЕСТЫ:
+  
+  Все сервисы:
+    ./scripts/test-docker.sh                     # Linux/Mac
+    .\scripts\test-docker.ps1                    # Windows
+  
+  Один сервис:
+    ./scripts/test-docker.sh auth-service
+    docker-compose -f docker-compose.test.yml run --rm test-auth-service
+  
+  Все по очереди:
+    docker-compose -f docker-compose.test.yml run --rm test-auth-service
+    docker-compose -f docker-compose.test.yml run --rm test-content-service
+    docker-compose -f docker-compose.test.yml run --rm test-api-gateway
+    docker-compose -f docker-compose.test.yml run --rm test-user-activity
+    docker-compose -f docker-compose.test.yml run --rm test-admin-panel
+
+📊 С ПОКРЫТИЕМ:
+  # Go
+  docker-compose -f docker-compose.test.yml run --rm test-auth-service \
+    go test ./... -cover
+  
+  # Python
+  docker-compose -f docker-compose.test.yml run --rm test-content-service \
+    pytest --cov=. --cov-report=term
+  
+  # Node.js
+  docker-compose -f docker-compose.test.yml run --rm test-api-gateway \
+    npm test -- --coverage
+
+🔍 ОТЛАДКА:
+  # Зайти в контейнер
+  docker-compose -f docker-compose.test.yml run --rm test-auth-service sh
+  
+  # Логи
+  docker-compose -f docker-compose.test.yml logs test-auth-service
+  
+  # Пересобрать без кэша
+  docker-compose -f docker-compose.test.yml build --no-cache
+
+🧹 ОЧИСТКА:
+  docker-compose -f docker-compose.test.yml down
+  docker-compose -f docker-compose.test.yml down -v    # + volumes
+
+⚡ MAKEFILE (быстрые команды):
+  make -f Makefile.test test              # Все тесты
+  make -f Makefile.test test-auth         # Auth Service
+  make -f Makefile.test test-content      # Content Service
+  make -f Makefile.test test-gateway      # API Gateway
+  make -f Makefile.test test-activity     # User Activity
+  make -f Makefile.test test-admin        # Admin Panel
+  make -f Makefile.test build-test        # Собрать образы
+  make -f Makefile.test clean-test        # Очистить
+
+❌ ТИПИЧНЫЕ ОШИБКИ:
+
+  НЕПРАВИЛЬНО:
+    docker-compose.test.yml build          ❌
+    docker compose.test.yml run            ❌
+  
+  ПРАВИЛЬНО:
+    docker-compose -f docker-compose.test.yml build    ✅
+    docker compose -f docker-compose.test.yml run      ✅
+                   ^^  НЕ ЗАБЫВАЙТЕ ФЛАГ -f!
+
+📚 ДОКУМЕНТАЦИЯ:
+  LINUX-TESTING-GUIDE.md  - Подробный гайд для Linux
+  DOCKER-TESTING.md       - Полная справка по Docker тестам
+  TESTING.md              - Общая документация по тестам
+
+🚀 БЫСТРЫЙ СТАРТ НА СЕРВЕРЕ:
+
+  1. chmod +x scripts/test-docker.sh
+  2. ./scripts/test-docker.sh
+  3. Готово! ✅
+
+┌─────────────────────────────────────────────────────────────┐
+│  Сохраните этот файл для быстрого доступа к командам!      │
+└─────────────────────────────────────────────────────────────┘
