@@ -14,6 +14,20 @@ NC='\033[0m' # No Color
 SERVICES=("auth-service" "content-service" "api-gateway" "user-activity" "admin-panel")
 FAILED_SERVICES=()
 
+# Определение команды Docker Compose
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo -e "${RED}❌ Docker Compose not found!${NC}"
+    echo "Install with: sudo apt install docker-compose"
+    echo "Or use Docker Compose v2 (comes with Docker)"
+    exit 1
+fi
+
+echo -e "${BLUE}Using: $DOCKER_COMPOSE${NC}"
+
 echo -e "${BLUE}🐳 Running tests in Docker containers${NC}"
 echo "========================================"
 
@@ -25,7 +39,7 @@ test_service() {
     echo -e "${YELLOW}Testing: $service${NC}"
     echo "----------------------------------------"
     
-    if docker-compose -f docker-compose.test.yml run --rm "test-$service"; then
+    if $DOCKER_COMPOSE -f docker-compose.test.yml run --rm "test-$service"; then
         echo -e "${GREEN}✓ $service tests passed${NC}"
         return 0
     else
@@ -49,7 +63,7 @@ done
 # Clean up
 echo ""
 echo -e "${BLUE}Cleaning up...${NC}"
-docker-compose -f docker-compose.test.yml down
+$DOCKER_COMPOSE -f docker-compose.test.yml down
 
 # Summary
 echo ""

@@ -11,9 +11,20 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Определение команды Docker Compose
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo -e "${RED}❌ Docker Compose not found!${NC}"
+    exit 1
+fi
+
 echo -e "${BLUE}═══════════════════════════════════════${NC}"
 echo -e "${BLUE}   SMU Microservices Deploy Pipeline   ${NC}"
 echo -e "${BLUE}═══════════════════════════════════════${NC}"
+echo -e "${BLUE}Using: $DOCKER_COMPOSE${NC}"
 
 # 1. Обновление кода
 echo ""
@@ -30,7 +41,7 @@ echo -e "${GREEN}✓ Code updated${NC}"
 # 2. Сборка тестовых образов
 echo ""
 echo -e "${YELLOW}🏗️  Step 2: Building test images...${NC}"
-docker-compose -f docker-compose.test.yml build
+$DOCKER_COMPOSE -f docker-compose.test.yml build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Failed to build test images${NC}"
@@ -56,7 +67,7 @@ echo -e "${GREEN}✓ All tests passed${NC}"
 # 4. Очистка тестовых контейнеров
 echo ""
 echo -e "${YELLOW}🧹 Step 4: Cleaning up test containers...${NC}"
-docker-compose -f docker-compose.test.yml down -v
+$DOCKER_COMPOSE -f docker-compose.test.yml down -v
 
 echo -e "${GREEN}✓ Cleanup complete${NC}"
 
@@ -65,10 +76,10 @@ echo ""
 echo -e "${YELLOW}🚀 Step 5: Deploying services...${NC}"
 
 # Остановить старые контейнеры
-docker-compose down
+$DOCKER_COMPOSE down
 
 # Собрать и запустить новые
-docker-compose up -d --build
+$DOCKER_COMPOSE up -d --build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed${NC}"
@@ -86,7 +97,7 @@ services=("auth-service" "content-service" "api-gateway" "user-activity" "admin-
 all_healthy=true
 
 for service in "${services[@]}"; do
-    if docker-compose ps | grep -q "$service.*Up"; then
+    if $DOCKER_COMPOSE ps | grep -q "$service.*Up"; then
         echo -e "${GREEN}✓ $service is running${NC}"
     else
         echo -e "${RED}✗ $service is not running${NC}"
