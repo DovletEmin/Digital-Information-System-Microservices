@@ -150,10 +150,10 @@ services:
       dockerfile: Dockerfile
     container_name: smu-api-gateway
     ports:
-      - "8000:8000"
+      - "3000:3000"
     environment:
       - NODE_ENV=development
-      - PORT=8000
+      - PORT=3000
       - AUTH_SERVICE_URL=http://auth-service:8001
       - CONTENT_SERVICE_URL=http://content-service:8002
       - SEARCH_SERVICE_URL=http://search-service:8003
