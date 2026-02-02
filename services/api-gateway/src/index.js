@@ -54,6 +54,14 @@ app.use('/api/v1/auth', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     logger.info(`Proxying ${req.method} ${req.path} to ${services.auth}`);
+    
+    // Fix for body forwarding issue
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   }
 }));
 
