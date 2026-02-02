@@ -36,7 +36,7 @@ func setupTestRouter(db *gorm.DB) *gin.Engine {
 
 	cfg := &config.Config{
 		JWTSecret:     "test-secret-key",
-		TokenDuration: 3600,
+		JWTExpiration: "1h",
 	}
 
 	handler := NewAuthHandler(db, cfg)

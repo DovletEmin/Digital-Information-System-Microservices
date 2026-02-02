@@ -11,9 +11,9 @@ func TestGenerateToken(t *testing.T) {
 	secret := "test-secret-key"
 	userID := uint(1)
 	username := "testuser"
-	duration := time.Hour
+	expiration := "1h"
 
-	token, err := GenerateToken(userID, username, duration, secret)
+	token, err := GenerateToken(userID, username, secret, expiration)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
 }
@@ -22,10 +22,10 @@ func TestValidateToken(t *testing.T) {
 	secret := "test-secret-key"
 	userID := uint(1)
 	username := "testuser"
-	duration := time.Hour
+	expiration := "1h"
 
-	validToken, _ := GenerateToken(userID, username, duration, secret)
-	expiredToken, _ := GenerateToken(userID, username, -time.Hour, secret)
+	validToken, _ := GenerateToken(userID, username, secret, expiration)
+	expiredToken, _ := GenerateToken(userID, username, secret, "-1h")
 
 	tests := []struct {
 		name      string
