@@ -1,0 +1,128 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  auth-service:
+    name: Auth Service Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Install dependencies
+        working-directory: ./services/auth-service
+        run: |
+          go mod download
+          go install github.com/stretchr/testify@latest
+
+      - name: Run tests
+        working-directory: ./services/auth-service
+        run: go test ./... -v -cover
+
+  content-service:
+    name: Content Service Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: ./services/content-service
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run tests
+        working-directory: ./services/content-service
+        run: pytest --cov=. --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./services/content-service/coverage.xml
+          flags: content-service
+
+  api-gateway:
+    name: API Gateway Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: ./services/api-gateway/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./services/api-gateway
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./services/api-gateway
+        run: npm test -- --coverage
+
+  user-activity:
+    name: User Activity Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: ./services/user-activity/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./services/user-activity
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./services/user-activity
+        run: npm test -- --coverage
+
+  admin-panel:
+    name: Admin Panel Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: ./admin-panel/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./admin-panel
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./admin-panel
+        run: npm test -- --coverage
+
+      - name: Build
+        working-directory: ./admin-panel
+        run: npm run build

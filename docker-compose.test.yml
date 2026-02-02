@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  test-auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile.test
+    container_name: test-auth-service
+    environment:
+      - CGO_ENABLED=0
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - test-network
+
+  test-content-service:
+    build:
+      context: ./services/content-service
+      dockerfile: Dockerfile.test
+    container_name: test-content-service
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./services/content-service:/app
+    networks:
+      - test-network
+
+  test-api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile.test
+    container_name: test-api-gateway
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    networks:
+      - test-network
+
+  test-user-activity:
+    build:
+      context: ./services/user-activity
+      dockerfile: Dockerfile.test
+    container_name: test-user-activity
+    volumes:
+      - ./services/user-activity:/app
+      - /app/node_modules
+    networks:
+      - test-network
+
+  test-admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile.test
+    container_name: test-admin-panel
+    volumes:
+      - ./admin-panel:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
