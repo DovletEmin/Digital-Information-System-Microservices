@@ -22,10 +22,16 @@ export default function LoginPage() {
         password,
       });
 
-      localStorage.setItem('token', data.access_token);
+      // API returns tokens object with access_token inside
+      const token = data.tokens?.access_token || data.access_token;
+      if (!token) {
+        throw new Error('No access token received');
+      }
+      
+      localStorage.setItem('token', token);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(err.response?.data?.message || err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
