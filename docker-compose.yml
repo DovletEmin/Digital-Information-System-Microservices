@@ -311,8 +311,9 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=production
-      # For browser (client-side) - must use localhost because browser runs on host machine
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
+      # For browser (client-side) - use server IP or domain
+      # Change 192.168.55.154 to your actual server IP or domain
+      - NEXT_PUBLIC_API_URL=http://192.168.55.154:3000
       # For server-side rendering - can use docker network
       - API_GATEWAY_URL=http://api-gateway:3000
     depends_on:
