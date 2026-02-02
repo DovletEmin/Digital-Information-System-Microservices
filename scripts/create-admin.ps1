@@ -32,7 +32,7 @@ $body = @{
 
 # Создание пользователя через API
 try {
-    $response = Invoke-RestMethod -Uri "http://localhost:8001/api/auth/register" `
+    $response = Invoke-RestMethod -Uri "http://localhost:8001/api/v1/register" `
         -Method Post `
         -ContentType "application/json" `
         -Body $body

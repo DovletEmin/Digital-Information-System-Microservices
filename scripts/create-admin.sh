@@ -48,7 +48,7 @@ echo ""
 echo "Creating user via API..."
 
 # Создание пользователя через API
-RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8001/api/auth/register \
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8001/api/v1/register \
   -H "Content-Type: application/json" \
   -d "{
     \"username\": \"$USERNAME\",
