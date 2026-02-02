@@ -81,20 +81,24 @@ class Article(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-class Book(Base):)
-    epub_file = Column(String(500))
-    cover_image = Column(String(500))
-    language = Column(String(10), default="tm", index=True)
+class Book(Base):
+    __tablename__ = "books"
     
-    # Статистика
-    views = Column(Integer, default=0, index=True)
-    rating = Column(Float, default=0."tm")
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False, index=True)
+    author = Column(String(255), nullable=False, index=True)
+    publisher = Column(String(255))
+    isbn = Column(String(50))
+    publication_date = Column(DateTime, index=True)
     pages = Column(Integer)
-    cover_image_url = Column(String(500))
+    description = Column(Text)
+    language = Column(String(10), default="tm", index=True)
+    cover_image = Column(String(500))
     file_url = Column(String(500))
     
     # Статистика
-    views_count = Column(Integer, default=0)
+    views = Column(Integer, default=0, index=True)
+    rating = Column(Float, default=0.0)
     average_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     
@@ -113,14 +117,19 @@ class Dissertation(Base):
     abstract = Column(Text, nullable=False)
     supervisor = Column(String(255))
     university = Column(String(255))
-    author_workplace = Column(String(255))
-    content = Column(Text, nullable=False)
+    department = Column(String(255))
+    degree_type = Column(String(50))  # PhD, Master, etc.
     language = Column(String(10), default="tm", index=True)
     publication_date = Column(DateTime, index=True)
+    file_url = Column(String(500))
     
     # Статистика
     views = Column(Integer, default=0, index=True)
-    rating = Column(Float, default=0.nCategory", secondary=dissertation_categories, back_populates="dissertations")
+    rating = Column(Float, default=0.0)
+    average_rating = Column(Float, default=0.0)
+    rating_count = Column(Integer, default=0)
+    
+    categories = relationship("DissertationCategory", secondary=dissertation_categories, back_populates="dissertations")
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
