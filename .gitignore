@@ -41,6 +41,7 @@ build/
 
 # Go
 *.test
+!Dockerfile.test
 *.out
 go.work
 
