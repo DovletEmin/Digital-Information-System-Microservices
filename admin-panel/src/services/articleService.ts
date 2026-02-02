@@ -3,33 +3,33 @@ import { Article, CreateArticleDto, PaginatedResponse } from '@/types';
 
 export const articleService = {
   getAll: async (page = 1, perPage = 10) => {
-    const { data } = await api.get<PaginatedResponse<Article>>('/content/articles', {
+    const { data } = await api.get<PaginatedResponse<Article>>('/api/v1/content/articles', {
       params: { page, per_page: perPage },
     });
     return data;
   },
 
   getById: async (id: number) => {
-    const { data } = await api.get<Article>(`/content/articles/${id}`);
+    const { data } = await api.get<Article>(`/api/v1/content/articles/${id}`);
     return data;
   },
 
   create: async (article: CreateArticleDto) => {
-    const { data } = await api.post<Article>('/content/articles', article);
+    const { data } = await api.post<Article>('/api/v1/content/articles', article);
     return data;
   },
 
   update: async (id: number, article: Partial<CreateArticleDto>) => {
-    const { data } = await api.put<Article>(`/content/articles/${id}`, article);
+    const { data } = await api.put<Article>(`/api/v1/content/articles/${id}`, article);
     return data;
   },
 
   delete: async (id: number) => {
-    await api.delete(`/content/articles/${id}`);
+    await api.delete(`/api/v1/content/articles/${id}`);
   },
 
   search: async (query: string, page = 1, perPage = 10) => {
-    const { data } = await api.get<PaginatedResponse<Article>>('/content/articles/search', {
+    const { data } = await api.get<PaginatedResponse<Article>>('/api/v1/content/articles/search', {
       params: { q: query, page, per_page: perPage },
     });
     return data;
