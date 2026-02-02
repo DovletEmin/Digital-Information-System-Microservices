@@ -18,17 +18,12 @@ class ArticleCategoryResponse(ArticleCategoryBase):
 class ArticleBase(BaseModel):
     title: str = Field(..., max_length=500)
     author: str = Field(..., max_length=255)
-    author_workplace: Optional[str] = None
+    authors_workplace: Optional[str] = None
+    thumbnail: Optional[str] = None
     content: str
-    abstract: Optional[str] = None
-    keywords: Optional[str] = None
     publication_date: Optional[datetime] = None
-    language: str = "tm"
-    type: str = "local"
-    source_name: Optional[str] = None
-    source_url: Optional[str] = None
-    newspaper_or_journal: Optional[str] = None
-    image: Optional[str] = None
+    language: str = "tm"  # tm, ru, en
+    type: str = "local"  # local, foreign
 
 class ArticleCreate(ArticleBase):
     category_ids: Optional[List[int]] = []
@@ -69,14 +64,12 @@ class BookCategoryResponse(BookCategoryBase):
 class BookBase(BaseModel):
     title: str = Field(..., max_length=500)
     author: str = Field(..., max_length=255)
-    publisher: Optional[str] = None
-    isbn: Optional[str] = None
+    authors_workplace: Optional[str] = None
+    thumbnail: Optional[str] = None
+    content: str
     publication_date: Optional[datetime] = None
-    pages: Optional[int] = None
-    description: Optional[str] = None
-    language: str = "tm"
-    cover_image: Optional[str] = None
-    file_url: Optional[str] = None
+    language: str = "tm"  # tm, ru, en
+    type: str = "local"  # local, foreign
 
 class BookCreate(BookBase):
     category_ids: Optional[List[int]] = []
@@ -84,7 +77,7 @@ class BookCreate(BookBase):
 class BookUpdate(BookBase):
     title: Optional[str] = None
     author: Optional[str] = None
-    description: Optional[str] = None
+    content: Optional[str] = None
     category_ids: Optional[List[int]] = None
 
 class BookResponse(BookBase):
@@ -117,15 +110,12 @@ class DissertationCategoryResponse(DissertationCategoryBase):
 class DissertationBase(BaseModel):
     title: str = Field(..., max_length=500)
     author: str = Field(..., max_length=255)
+    authors_workplace: Optional[str] = None
+    thumbnail: Optional[str] = None
     content: str
-    abstract: str
-    supervisor: Optional[str] = None
-    university: Optional[str] = None
-    department: Optional[str] = None
-    degree_type: Optional[str] = None
-    language: str = "tm"
     publication_date: Optional[datetime] = None
-    file_url: Optional[str] = None
+    language: str = "tm"  # tm, ru, en
+    type: str = "local"  # local, foreign
 
 class DissertationCreate(DissertationBase):
     category_ids: Optional[List[int]] = []

@@ -301,6 +301,24 @@ services:
       - smu-network
     restart: unless-stopped
 
+  # ================== Admin Panel ==================
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    container_name: smu-admin-panel
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://api-gateway:3000
+      - API_GATEWAY_URL=http://api-gateway:3000
+    depends_on:
+      - api-gateway
+    networks:
+      - smu-network
+    restart: unless-stopped
+
 volumes:
   postgres-auth-data:
   postgres-content-data:

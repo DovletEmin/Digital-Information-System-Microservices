@@ -58,17 +58,12 @@ class Article(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), nullable=False, index=True)
     author = Column(String(255), nullable=False, index=True)
-    author_workplace = Column(String(255))
-    content = Column(Text, nullable=False)
-    abstract = Column(Text)
-    keywords = Column(String(500))
+    authors_workplace = Column(String(255))
+    thumbnail = Column(String(500))  # image URL
+    content = Column(Text, nullable=False)  # text content
     publication_date = Column(DateTime, index=True)
-    language = Column(String(10), default="tm", index=True)
-    type = Column(String(10), default="local", index=True)  # local/foreign
-    source_name = Column(String(255))
-    source_url = Column(String(500))
-    newspaper_or_journal = Column(String(255))
-    image = Column(String(500))
+    language = Column(String(10), default="tm", index=True)  # tm, ru, en
+    type = Column(String(10), default="local", index=True)  # local, foreign
     
     # Статистика
     views = Column(Integer, default=0, index=True)
@@ -87,14 +82,12 @@ class Book(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), nullable=False, index=True)
     author = Column(String(255), nullable=False, index=True)
-    publisher = Column(String(255))
-    isbn = Column(String(50))
+    authors_workplace = Column(String(255))
+    thumbnail = Column(String(500))  # image URL
+    content = Column(Text, nullable=False)  # text, e-pub, pdf
     publication_date = Column(DateTime, index=True)
-    pages = Column(Integer)
-    description = Column(Text)
-    language = Column(String(10), default="tm", index=True)
-    cover_image = Column(String(500))
-    file_url = Column(String(500))
+    language = Column(String(10), default="tm", index=True)  # tm, ru, en
+    type = Column(String(10), default="local", index=True)  # local, foreign
     
     # Статистика
     views = Column(Integer, default=0, index=True)
@@ -113,15 +106,12 @@ class Dissertation(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), nullable=False, index=True)
     author = Column(String(255), nullable=False, index=True)
-    content = Column(Text, nullable=False)
-    abstract = Column(Text, nullable=False)
-    supervisor = Column(String(255))
-    university = Column(String(255))
-    department = Column(String(255))
-    degree_type = Column(String(50))  # PhD, Master, etc.
-    language = Column(String(10), default="tm", index=True)
+    authors_workplace = Column(String(255))
+    thumbnail = Column(String(500))  # image URL
+    content = Column(Text, nullable=False)  # text, e-pub, pdf
     publication_date = Column(DateTime, index=True)
-    file_url = Column(String(500))
+    language = Column(String(10), default="tm", index=True)  # tm, ru, en
+    type = Column(String(10), default="local", index=True)  # local, foreign
     
     # Статистика
     views = Column(Integer, default=0, index=True)

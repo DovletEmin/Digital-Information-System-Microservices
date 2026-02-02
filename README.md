@@ -277,7 +277,3 @@ docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 ## 📝 Лицензия
 
 MIT License
-
-## 🤝 Контакты
-
-Университет Сарыныязова Мырата
