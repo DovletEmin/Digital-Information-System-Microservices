@@ -2,8 +2,11 @@ FROM golang:1.23-alpine
 
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
+# Install dependencies including gcc for CGO
+RUN apk add --no-cache git gcc musl-dev
+
+# Enable CGO for sqlite
+ENV CGO_ENABLED=1
 
 # Copy go mod files
 COPY go.mod go.sum ./
