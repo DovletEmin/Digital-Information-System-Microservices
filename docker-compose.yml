@@ -1,0 +1,315 @@
+version: '3.8'
+
+services:
+  # ================== Infrastructure ==================
+  
+  # PostgreSQL для Auth Service
+  postgres-auth:
+    image: postgres:15-alpine
+    container_name: smu-postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL для Content Service
+  postgres-content:
+    image: postgres:15-alpine
+    container_name: smu-postgres-content
+    environment:
+      POSTGRES_DB: content_db
+      POSTGRES_USER: content_user
+      POSTGRES_PASSWORD: content_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-content-data:/var/lib/postgresql/data
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U content_user -d content_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB для User Activity Service
+  mongodb:
+    image: mongo:7
+    container_name: smu-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo_user
+      MONGO_INITDB_ROOT_PASSWORD: mongo_pass
+      MONGO_INITDB_DATABASE: activity_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - smu-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch для Search Service
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: smu-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis для кэширования и сессий
+  redis:
+    image: redis:7-alpine
+    container_name: smu-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ для асинхронной коммуникации
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: smu-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq_user
+      RABBITMQ_DEFAULT_PASS: rabbitmq_pass
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MinIO для хранения файлов (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: smu-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - smu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ================== Microservices ==================
+
+  # API Gateway (Node.js)
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: smu-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - PORT=8000
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - CONTENT_SERVICE_URL=http://content-service:8002
+      - SEARCH_SERVICE_URL=http://search-service:8003
+      - USER_ACTIVITY_SERVICE_URL=http://user-activity:8004
+      - MEDIA_SERVICE_URL=http://media-service:8005
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-jwt-secret-key-change-in-production
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+  # Auth Service (Go)
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: smu-auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - DB_HOST=postgres-auth
+      - DB_PORT=5432
+      - DB_USER=auth_user
+      - DB_PASSWORD=auth_pass
+      - DB_NAME=auth_db
+      - JWT_SECRET=your-jwt-secret-key-change-in-production
+      - JWT_EXPIRATION=24h
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+  # Content Service (Python FastAPI)
+  content-service:
+    build:
+      context: ./services/content-service
+      dockerfile: Dockerfile
+    container_name: smu-content-service
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - DATABASE_URL=postgresql://content_user:content_pass@postgres-content:5432/content_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      postgres-content:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+  # Search Service (Python FastAPI)
+  search-service:
+    build:
+      context: ./services/search-service
+      dockerfile: Dockerfile
+    container_name: smu-search-service
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+  # User Activity Service (Node.js)
+  user-activity:
+    build:
+      context: ./services/user-activity
+      dockerfile: Dockerfile
+    container_name: smu-user-activity
+    ports:
+      - "8004:8004"
+    environment:
+      - NODE_ENV=development
+      - PORT=8004
+      - MONGODB_URI=mongodb://mongo_user:mongo_pass@mongodb:27017/activity_db?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+      - AUTH_SERVICE_URL=http://auth-service:8001
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+  # Media Service (Go)
+  media-service:
+    build:
+      context: ./services/media-service
+      dockerfile: Dockerfile
+    container_name: smu-media-service
+    ports:
+      - "8005:8005"
+    environment:
+      - PORT=8005
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+      - MINIO_BUCKET=smu-media
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+    depends_on:
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smu-network
+    restart: unless-stopped
+
+volumes:
+  postgres-auth-data:
+  postgres-content-data:
+  mongodb-data:
+  elasticsearch-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:
+
+networks:
+  smu-network:
+    driver: bridge
