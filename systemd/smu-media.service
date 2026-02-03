@@ -1,0 +1,19 @@
+[Unit]
+Description=SMU Media Service
+After=network.target
+Wants=minio.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/services/media-service
+Environment="MINIO_ENDPOINT=localhost:9000"
+Environment="MINIO_ACCESS_KEY=minioadmin"
+Environment="MINIO_SECRET_KEY=minioadmin"
+Environment="PORT=8005"
+ExecStart=/opt/smu-microservices/services/media-service/media-service
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

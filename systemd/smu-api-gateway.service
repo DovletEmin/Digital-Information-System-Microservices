@@ -1,0 +1,22 @@
+[Unit]
+Description=SMU API Gateway
+After=network.target smu-auth.service smu-content.service
+Wants=smu-auth.service smu-content.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/services/api-gateway
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+Environment="AUTH_SERVICE_URL=http://localhost:8001"
+Environment="CONTENT_SERVICE_URL=http://localhost:8002"
+Environment="SEARCH_SERVICE_URL=http://localhost:8003"
+Environment="USER_ACTIVITY_SERVICE_URL=http://localhost:8004"
+Environment="MEDIA_SERVICE_URL=http://localhost:8005"
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=SMU User Activity Service
+After=network.target mongodb.service
+Wants=mongodb.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/services/user-activity
+Environment="NODE_ENV=production"
+Environment="MONGODB_URI=mongodb://localhost:27017/smu_activity"
+Environment="PORT=8004"
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

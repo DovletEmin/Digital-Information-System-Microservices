@@ -1,0 +1,17 @@
+[Unit]
+Description=SMU Admin Panel
+After=network.target smu-api-gateway.service
+Wants=smu-api-gateway.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/admin-panel
+Environment="NODE_ENV=production"
+Environment="NEXT_PUBLIC_API_URL=http://localhost:3000"
+ExecStart=/usr/bin/npm start -- -p 3001
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

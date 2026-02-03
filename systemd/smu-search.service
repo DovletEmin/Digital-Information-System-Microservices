@@ -1,0 +1,17 @@
+[Unit]
+Description=SMU Search Service
+After=network.target elasticsearch.service
+Wants=elasticsearch.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/services/search-service
+Environment="ELASTICSEARCH_URL=http://localhost:9200"
+Environment="PORT=8003"
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8003
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

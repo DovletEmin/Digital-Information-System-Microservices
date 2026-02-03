@@ -1,0 +1,17 @@
+[Unit]
+Description=SMU Content Service
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/smu-microservices/services/content-service
+Environment="DATABASE_URL=postgresql://smuuser:smupass@localhost:5433/smu_content"
+Environment="PORT=8002"
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8002
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
