@@ -7,8 +7,40 @@ set -e
 
 echo "=== Развертывание SMU Microservices ==="
 
+# Добавляем Go в PATH если он есть
+export PATH=$PATH:/usr/local/go/bin
+
 PROJECT_DIR="/opt/smu-microservices"
 CURRENT_DIR=$(pwd)
+
+# Проверка зависимостей
+echo "Проверка необходимых зависимостей..."
+missing_deps=()
+
+if ! command -v node &> /dev/null; then
+    missing_deps+=("Node.js")
+fi
+
+if ! command -v python3 &> /dev/null; then
+    missing_deps+=("Python 3")
+fi
+
+if ! command -v go &> /dev/null; then
+    missing_deps+=("Go")
+fi
+
+if [ ${#missing_deps[@]} -ne 0 ]; then
+    echo "ОШИБКА: Не установлены следующие зависимости:"
+    printf '  - %s\n' "${missing_deps[@]}"
+    echo ""
+    echo "Запустите сначала: sudo ./systemd/install-dependencies.sh"
+    exit 1
+fi
+
+echo "✓ Node.js: $(node --version)"
+echo "✓ Python: $(python3 --version)"
+echo "✓ Go: $(go version | awk '{print $3}')"
+echo ""
 
 # Проверка прав root для копирования в /opt
 if [ ! -d "$PROJECT_DIR" ]; then
