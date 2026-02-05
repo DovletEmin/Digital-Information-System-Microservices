@@ -31,7 +31,7 @@ class ArticleCategory(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
-    articles = relationship("Article", secondary=article_categories, back_populates="categories")
+    articles = relationship("Article", secondary=article_categories, back_populates="categories", lazy='noload')
 
 class BookCategory(Base):
     __tablename__ = "book_categories_table"
@@ -40,7 +40,7 @@ class BookCategory(Base):
     name = Column(String(100), nullable=False)
     parent_id = Column(Integer, ForeignKey('book_categories_table.id'), nullable=True)
     parent = relationship("BookCategory", remote_side=[id], backref="subcategories")
-    books = relationship("Book", secondary=book_categories, back_populates="categories")
+    books = relationship("Book", secondary=book_categories, back_populates="categories", lazy='noload')
 
 class DissertationCategory(Base):
     __tablename__ = "dissertation_categories_table"
@@ -49,7 +49,7 @@ class DissertationCategory(Base):
     name = Column(String(100), nullable=False)
     parent_id = Column(Integer, ForeignKey('dissertation_categories_table.id'), nullable=True)
     parent = relationship("DissertationCategory", remote_side=[id], backref="subcategories")
-    dissertations = relationship("Dissertation", secondary=dissertation_categories, back_populates="categories")
+    dissertations = relationship("Dissertation", secondary=dissertation_categories, back_populates="categories", lazy='noload')
 
 # Контент
 class Article(Base):
@@ -121,5 +121,83 @@ class Dissertation(Base):
     
     categories = relationship("DissertationCategory", secondary=dissertation_categories, back_populates="dissertations")
     
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Сохраненные статьи (закладки)
+class SavedArticle(Base):
+    __tablename__ = "saved_articles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)  # ID пользователя из auth-service
+    article_id = Column(Integer, ForeignKey('articles.id'), nullable=False)
+    article = relationship("Article")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Выделенный текст
+class ArticleHighlight(Base):
+    __tablename__ = "article_highlights"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)  # ID пользователя
+    article_id = Column(Integer, ForeignKey('articles.id'), nullable=False)
+    article = relationship("Article")
+    text = Column(Text, nullable=False)  # Выделенный текст
+    start_offset = Column(Integer, nullable=False)  # Начальная позиция в контенте
+    end_offset = Column(Integer, nullable=False)  # Конечная позиция
+    color = Column(String(20), default="yellow")  # yellow, green, blue, red
+    note = Column(Text)  # Заметка к выделению
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Сохраненные книги (закладки)
+class SavedBook(Base):
+    __tablename__ = "saved_books"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
+    book = relationship("Book")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Выделенный текст книги
+class BookHighlight(Base):
+    __tablename__ = "book_highlights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
+    book = relationship("Book")
+    text = Column(Text, nullable=False)
+    start_offset = Column(Integer, nullable=False)
+    end_offset = Column(Integer, nullable=False)
+    color = Column(String(20), default="yellow")
+    note = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Сохраненные диссертации (закладки)
+class SavedDissertation(Base):
+    __tablename__ = "saved_dissertations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    dissertation_id = Column(Integer, ForeignKey('dissertations.id'), nullable=False)
+    dissertation = relationship("Dissertation")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Выделенный текст диссертаций
+class DissertationHighlight(Base):
+    __tablename__ = "dissertation_highlights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    dissertation_id = Column(Integer, ForeignKey('dissertations.id'), nullable=False)
+    dissertation = relationship("Dissertation")
+    text = Column(Text, nullable=False)
+    start_offset = Column(Integer, nullable=False)
+    end_offset = Column(Integer, nullable=False)
+    color = Column(String(20), default="yellow")
+    note = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

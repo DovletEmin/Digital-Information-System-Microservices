@@ -8,7 +8,7 @@ import math
 
 router = APIRouter()
 
-@router.get("/", response_model=dict)
+@router.get("/books", response_model=dict)
 async def list_books(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -36,15 +36,36 @@ async def list_books(
     total = query.count()
     books = query.offset((page - 1) * per_page).limit(per_page).all()
     
+    items = []
+    for book in books:
+        items.append({
+            "id": book.id,
+            "title": book.title,
+            "author": book.author,
+            "authors_workplace": book.authors_workplace,
+            "thumbnail": book.thumbnail,
+            "content": book.content,
+            "publication_date": book.publication_date,
+            "language": book.language,
+            "type": book.type,
+            "views": book.views,
+            "rating": book.rating,
+            "average_rating": book.average_rating,
+            "rating_count": book.rating_count,
+            "categories": [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in book.categories],
+            "created_at": book.created_at,
+            "updated_at": book.updated_at
+        })
+    
     return {
-        "items": books,
+        "items": items,
         "total": total,
         "page": page,
         "per_page": per_page,
         "pages": math.ceil(total / per_page)
     }
 
-@router.get("/{book_id}", response_model=BookResponse)
+@router.get("/books/{book_id}")
 async def get_book(book_id: int, db: Session = Depends(get_db)):
     """Получение книги по ID"""
     book = db.query(Book).filter(Book.id == book_id).first()
@@ -54,9 +75,26 @@ async def get_book(book_id: int, db: Session = Depends(get_db)):
     book.views += 1
     db.commit()
     
-    return book
+    return {
+        "id": book.id,
+        "title": book.title,
+        "author": book.author,
+        "authors_workplace": book.authors_workplace,
+        "thumbnail": book.thumbnail,
+        "content": book.content,
+        "publication_date": book.publication_date,
+        "language": book.language,
+        "type": book.type,
+        "views": book.views,
+        "rating": book.rating,
+        "average_rating": book.average_rating,
+        "rating_count": book.rating_count,
+        "categories": [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in book.categories],
+        "created_at": book.created_at,
+        "updated_at": book.updated_at
+    }
 
-@router.post("/", response_model=BookResponse, status_code=201)
+@router.post("/books", status_code=201)
 async def create_book(book: BookCreate, db: Session = Depends(get_db)):
     """Создание новой книги"""
     db_book = Book(**book.model_dump(exclude={"category_ids"}))
@@ -69,9 +107,26 @@ async def create_book(book: BookCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_book)
     
-    return db_book
+    return {
+        "id": db_book.id,
+        "title": db_book.title,
+        "author": db_book.author,
+        "authors_workplace": db_book.authors_workplace,
+        "thumbnail": db_book.thumbnail,
+        "content": db_book.content,
+        "publication_date": db_book.publication_date,
+        "language": db_book.language,
+        "type": db_book.type,
+        "views": db_book.views,
+        "rating": db_book.rating,
+        "average_rating": db_book.average_rating,
+        "rating_count": db_book.rating_count,
+        "categories": [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in db_book.categories],
+        "created_at": db_book.created_at,
+        "updated_at": db_book.updated_at
+    }
 
-@router.put("/{book_id}", response_model=BookResponse)
+@router.put("/books/{book_id}")
 async def update_book(book_id: int, book: BookUpdate, db: Session = Depends(get_db)):
     """Обновление книги"""
     db_book = db.query(Book).filter(Book.id == book_id).first()
@@ -89,9 +144,26 @@ async def update_book(book_id: int, book: BookUpdate, db: Session = Depends(get_
     db.commit()
     db.refresh(db_book)
     
-    return db_book
+    return {
+        "id": db_book.id,
+        "title": db_book.title,
+        "author": db_book.author,
+        "authors_workplace": db_book.authors_workplace,
+        "thumbnail": db_book.thumbnail,
+        "content": db_book.content,
+        "publication_date": db_book.publication_date,
+        "language": db_book.language,
+        "type": db_book.type,
+        "views": db_book.views,
+        "rating": db_book.rating,
+        "average_rating": db_book.average_rating,
+        "rating_count": db_book.rating_count,
+        "categories": [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in db_book.categories],
+        "created_at": db_book.created_at,
+        "updated_at": db_book.updated_at
+    }
 
-@router.delete("/{book_id}")
+@router.delete("/books/{book_id}")
 async def delete_book(book_id: int, db: Session = Depends(get_db)):
     """Удаление книги"""
     db_book = db.query(Book).filter(Book.id == book_id).first()

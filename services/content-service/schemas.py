@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+import json
 
 # Article Schemas
 class ArticleCategoryBase(BaseModel):
@@ -24,6 +25,15 @@ class ArticleBase(BaseModel):
     publication_date: Optional[datetime] = None
     language: str = "tm"  # tm, ru, en
     type: str = "local"  # local, foreign
+    
+    @field_validator('content', 'title', 'author', mode='before')
+    @classmethod
+    def clean_text(cls, v):
+        if isinstance(v, str):
+            # Удаляем проблемные управляющие символы, кроме переносов строк
+            v = v.replace('\x00', '')  # null byte
+            v = v.replace('\r\n', '\n')  # normalize line endings
+        return v
 
 class ArticleCreate(ArticleBase):
     category_ids: Optional[List[int]] = []
@@ -70,6 +80,14 @@ class BookBase(BaseModel):
     publication_date: Optional[datetime] = None
     language: str = "tm"  # tm, ru, en
     type: str = "local"  # local, foreign
+    
+    @field_validator('content', 'title', 'author', mode='before')
+    @classmethod
+    def clean_text(cls, v):
+        if isinstance(v, str):
+            v = v.replace('\x00', '')
+            v = v.replace('\r\n', '\n')
+        return v
 
 class BookCreate(BookBase):
     category_ids: Optional[List[int]] = []
@@ -116,6 +134,14 @@ class DissertationBase(BaseModel):
     publication_date: Optional[datetime] = None
     language: str = "tm"  # tm, ru, en
     type: str = "local"  # local, foreign
+    
+    @field_validator('content', 'title', 'author', mode='before')
+    @classmethod
+    def clean_text(cls, v):
+        if isinstance(v, str):
+            v = v.replace('\x00', '')
+            v = v.replace('\r\n', '\n')
+        return v
 
 class DissertationCreate(DissertationBase):
     category_ids: Optional[List[int]] = []
@@ -146,3 +172,108 @@ class PaginatedResponse(BaseModel):
     page: int
     per_page: int
     pages: int
+
+# Saved Articles Schemas
+class SavedArticleCreate(BaseModel):
+    article_id: int
+
+class SavedArticleResponse(BaseModel):
+    id: int
+    article_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Saved Books Schemas
+class SavedBookCreate(BaseModel):
+    book_id: int
+
+class SavedBookResponse(BaseModel):
+    id: int
+    book_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Saved Dissertations Schemas
+class SavedDissertationCreate(BaseModel):
+    dissertation_id: int
+
+class SavedDissertationResponse(BaseModel):
+    id: int
+    dissertation_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Highlight Schemas
+class HighlightCreate(BaseModel):
+    article_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str = "yellow"  # yellow, green, blue, red
+    note: Optional[str] = None
+
+class HighlightResponse(BaseModel):
+    id: int
+    article_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Book Highlight Schemas
+class BookHighlightCreate(BaseModel):
+    book_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str = "yellow"
+    note: Optional[str] = None
+
+class BookHighlightResponse(BaseModel):
+    id: int
+    book_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Dissertation Highlight Schemas
+class DissertationHighlightCreate(BaseModel):
+    dissertation_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str = "yellow"
+    note: Optional[str] = None
+
+class DissertationHighlightResponse(BaseModel):
+    id: int
+    dissertation_id: int
+    text: str
+    start_offset: int
+    end_offset: int
+    color: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

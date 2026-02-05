@@ -8,7 +8,7 @@ import math
 
 router = APIRouter()
 
-@router.get("/", response_model=dict)
+@router.get("/articles", response_model=dict)
 async def list_articles(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -31,23 +31,44 @@ async def list_articles(
     if search:
         query = query.filter(
             (Article.title.ilike(f"%{search}%")) | 
-            (Article.author.ilike(f"%{search}%")) |
-            (Article.keywords.ilike(f"%{search}%"))
+            (Article.author.ilike(f"%{search}%"))
         )
     
     # Пагинация
     total = query.count()
     articles = query.offset((page - 1) * per_page).limit(per_page).all()
     
+    # Конвертируем в dict для правильной сериализации
+    items = []
+    for article in articles:
+        items.append({
+            "id": article.id,
+            "title": article.title,
+            "author": article.author,
+            "authors_workplace": article.authors_workplace,
+            "thumbnail": article.thumbnail,
+            "content": article.content,
+            "publication_date": article.publication_date,
+            "language": article.language,
+            "type": article.type,
+            "views": article.views,
+            "rating": article.rating,
+            "average_rating": article.average_rating,
+            "rating_count": article.rating_count,
+            "categories": [{"id": c.id, "name": c.name} for c in article.categories],
+            "created_at": article.created_at,
+            "updated_at": article.updated_at
+        })
+    
     return {
-        "items": articles,
+        "items": items,
         "total": total,
         "page": page,
         "per_page": per_page,
         "pages": math.ceil(total / per_page)
     }
 
-@router.get("/{article_id}", response_model=ArticleResponse)
+@router.get("/articles/{article_id}", response_model=ArticleResponse)
 async def get_article(article_id: int, db: Session = Depends(get_db)):
     """Получение статьи по ID"""
     article = db.query(Article).filter(Article.id == article_id).first()
@@ -60,24 +81,29 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
     
     return article
 
-@router.post("/", response_model=ArticleResponse, status_code=201)
+@router.post("/articles", response_model=ArticleResponse, status_code=201)
 async def create_article(article: ArticleCreate, db: Session = Depends(get_db)):
     """Создание новой статьи"""
-    # Создаем статью
-    db_article = Article(**article.model_dump(exclude={"category_ids"}))
-    
-    # Добавляем категории
-    if article.category_ids:
-        categories = db.query(ArticleCategory).filter(ArticleCategory.id.in_(article.category_ids)).all()
-        db_article.categories = categories
-    
-    db.add(db_article)
-    db.commit()
-    db.refresh(db_article)
-    
-    return db_article
+    try:
+        # Создаем статью
+        db_article = Article(**article.model_dump(exclude={"category_ids"}))
+        
+        # Добавляем категории
+        if article.category_ids:
+            categories = db.query(ArticleCategory).filter(ArticleCategory.id.in_(article.category_ids)).all()
+            db_article.categories = categories
+        
+        db.add(db_article)
+        db.commit()
+        db.refresh(db_article)
+        
+        return db_article
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating article: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to create article: {str(e)}")
 
-@router.put("/{article_id}", response_model=ArticleResponse)
+@router.put("/articles/{article_id}", response_model=ArticleResponse)
 async def update_article(
     article_id: int,
     article: ArticleUpdate,
@@ -103,7 +129,7 @@ async def update_article(
     
     return db_article
 
-@router.delete("/{article_id}")
+@router.delete("/articles/{article_id}")
 async def delete_article(article_id: int, db: Session = Depends(get_db)):
     """Удаление статьи"""
     db_article = db.query(Article).filter(Article.id == article_id).first()
