@@ -332,6 +332,30 @@ services:
       - smu-network
     restart: unless-stopped
 
+  # ================== Frontend ==================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://192.168.55.154:3000
+    container_name: smu-frontend
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      # For browser (client-side) - use server IP or domain
+      # Change 192.168.55.154 to your actual server IP or domain
+      - NEXT_PUBLIC_API_URL=http://192.168.55.154:3000
+      # For server-side rendering - can use docker network
+      - API_GATEWAY_URL=http://api-gateway:3000
+      - PORT=3002
+    depends_on:
+      - api-gateway
+    networks:
+      - smu-network
+    restart: unless-stopped
+
 volumes:
   postgres-auth-data:
   postgres-content-data:
