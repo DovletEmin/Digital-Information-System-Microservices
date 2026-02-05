@@ -1,4 +1,5 @@
 import api from '@/lib/api';
+import type { Article, Book, Dissertation, PaginatedResponse } from '@/types';
 
 export interface Highlight {
   id: number;
@@ -60,17 +61,17 @@ export const savedService = {
   },
 
   getSavedArticles: async (page = 1, perPage = 20) => {
-    const { data } = await api.get(`/api/v1/saved-articles?page=${page}&per_page=${perPage}`);
+    const { data } = await api.get<PaginatedResponse<Article>>(`/api/v1/saved-articles?page=${page}&per_page=${perPage}`);
     return data;
   },
 
   getSavedBooks: async (page = 1, perPage = 20) => {
-    const { data } = await api.get(`/api/v1/saved-books?page=${page}&per_page=${perPage}`);
+    const { data } = await api.get<PaginatedResponse<Book>>(`/api/v1/saved-books?page=${page}&per_page=${perPage}`);
     return data;
   },
 
   getSavedDissertations: async (page = 1, perPage = 20) => {
-    const { data } = await api.get(`/api/v1/saved-dissertations?page=${page}&per_page=${perPage}`);
+    const { data } = await api.get<PaginatedResponse<Dissertation>>(`/api/v1/saved-dissertations?page=${page}&per_page=${perPage}`);
     return data;
   },
 
