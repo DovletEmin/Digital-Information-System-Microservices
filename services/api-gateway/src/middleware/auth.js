@@ -5,6 +5,9 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:8001'
 
 async function authMiddleware(req, res, next) {
   try {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
