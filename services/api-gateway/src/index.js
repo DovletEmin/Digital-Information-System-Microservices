@@ -11,9 +11,31 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+const corsOriginsEnv = process.env.CORS_ORIGINS || '*';
+let corsOptions;
+
+if (!corsOriginsEnv || corsOriginsEnv.trim() === '*') {
+  corsOptions = { origin: true, credentials: true };
+} else {
+  const allowedOrigins = corsOriginsEnv
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+  corsOptions = {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+  };
+}
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Rate limiting (временно отключено)
@@ -64,6 +86,17 @@ app.use('/api/v1/auth', createProxyMiddleware({
     }
   }
 }));
+ 
+// Users Service Routes - /api/v1/users/*
+app.use('/api/v1/users', createProxyMiddleware({
+  target: services.auth,
+  pathRewrite: { '^/api/v1/users': '/api/v1/users' },
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Auth service error:', err.message);
+    res.status(503).json({ error: 'Auth service unavailable' });
+  }
+}));
 
 // Content Service Routes - прямой проксинг без изменения пути
 // /api/v1/articles, /api/v1/books, /api/v1/dissertations
@@ -73,6 +106,15 @@ app.use('/api/v1/articles', createProxyMiddleware({
   onError: (err, req, res) => {
     logger.error('Content service error:', err.message);
     res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   }
 }));
 
@@ -82,6 +124,15 @@ app.use('/api/v1/books', createProxyMiddleware({
   onError: (err, req, res) => {
     logger.error('Content service error:', err.message);
     res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   }
 }));
 
@@ -91,23 +142,192 @@ app.use('/api/v1/dissertations', createProxyMiddleware({
   onError: (err, req, res) => {
     logger.error('Content service error:', err.message);
     res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+// Saved articles/books/dissertations + highlights (requires auth)
+app.use('/api/v1/saved-articles', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+app.use('/api/v1/highlights', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+app.use('/api/v1/saved-books', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+app.use('/api/v1/book-highlights', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+app.use('/api/v1/saved-dissertations', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
+}));
+
+app.use('/api/v1/dissertation-highlights', authMiddleware, createProxyMiddleware({
+  target: services.content,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req) => {
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   }
 }));
 
 // Categories
 app.use('/api/v1/article-categories', createProxyMiddleware({
   target: services.content,
-  changeOrigin: true
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
 }));
 
 app.use('/api/v1/book-categories', createProxyMiddleware({
   target: services.content,
-  changeOrigin: true
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
 }));
 
 app.use('/api/v1/dissertation-categories', createProxyMiddleware({
   target: services.content,
-  changeOrigin: true
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Content service error:', err.message);
+    res.status(503).json({ error: 'Content service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  }
 }));
 
 // Search Service Routes - /api/v1/search
@@ -132,10 +352,39 @@ app.use('/api/v1/bookmarks', authMiddleware, createProxyMiddleware({
   }
 }));
 
+// Ratings - /api/v1/ratings
+app.use('/api/v1/ratings', authMiddleware, createProxyMiddleware({
+  target: services.activity,
+  pathRewrite: { '^/api/v1/ratings': '/api/v1/ratings' },
+  changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.activity}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
+  onError: (err, req, res) => {
+    logger.error('Activity service error:', err.message);
+    res.status(503).json({ error: 'Activity service unavailable' });
+  }
+}));
+
 app.use('/api/v1/rate', authMiddleware, createProxyMiddleware({
   target: services.activity,
   pathRewrite: { '^/api/v1/rate': '/api/v1/ratings' },
   changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.activity}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
   onError: (err, req, res) => {
     logger.error('Activity service error:', err.message);
     res.status(503).json({ error: 'Activity service unavailable' });
@@ -146,6 +395,15 @@ app.use('/api/v1/views', createProxyMiddleware({
   target: services.activity,
   pathRewrite: { '^/api/v1/views': '/api/v1/views' },
   changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.activity}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+  },
   onError: (err, req, res) => {
     logger.error('Activity service error:', err.message);
     res.status(503).json({ error: 'Activity service unavailable' });

@@ -14,9 +14,31 @@ const authMiddleware = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 8004;
 
+const corsOriginsEnv = process.env.CORS_ORIGINS || '*';
+let corsOptions;
+
+if (!corsOriginsEnv || corsOriginsEnv.trim() === '*' ) {
+  corsOptions = { origin: true, credentials: true };
+} else {
+  const allowedOrigins = corsOriginsEnv
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+  corsOptions = {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+  };
+}
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // MongoDB connection

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from elasticsearch import Elasticsearch, NotFoundError
 from typing import List, Optional
 import os
@@ -11,10 +12,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Allowed hosts
+allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "*")
+allowed_hosts = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+if allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
 # CORS
+cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

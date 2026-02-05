@@ -161,6 +161,7 @@ services:
       - MEDIA_SERVICE_URL=http://media-service:8005
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=your-jwt-secret-key-change-in-production
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
     depends_on:
       redis:
         condition: service_healthy
@@ -187,6 +188,7 @@ services:
       - JWT_EXPIRATION=24h
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
     depends_on:
       postgres-auth:
         condition: service_healthy
@@ -212,6 +214,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
       - AUTH_SERVICE_URL=http://auth-service:8001
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
+      - ALLOWED_HOSTS=localhost,127.0.0.1,192.168.55.154,api-gateway,content-service
     depends_on:
       postgres-content:
         condition: service_healthy
@@ -236,6 +240,8 @@ services:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
+      - ALLOWED_HOSTS=localhost,127.0.0.1,192.168.55.154,api-gateway,search-service
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -262,6 +268,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
       - AUTH_SERVICE_URL=http://auth-service:8001
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
     depends_on:
       mongodb:
         condition: service_healthy
@@ -290,6 +297,7 @@ services:
       - MINIO_BUCKET=smu-media
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://192.168.55.154:3000,http://192.168.55.154:3001
     depends_on:
       minio:
         condition: service_healthy
