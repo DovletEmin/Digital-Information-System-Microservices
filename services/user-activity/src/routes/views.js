@@ -2,11 +2,13 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const View = require('../models/View');
 const logger = require('../logger');
+const optionalAuth = require('../middleware/optionalAuth');
 
 const router = express.Router();
 
 // Записать просмотр
 router.post('/',
+  optionalAuth,
   [
     body('contentType').isIn(['article', 'book', 'dissertation']),
     body('contentId').isInt()
@@ -40,6 +42,61 @@ router.post('/',
     }
   }
 );
+
+// Общая статистика просмотров
+router.get('/summary', async (req, res) => {
+  try {
+    const [total, authenticated, anonymous, byContentType] = await Promise.all([
+      View.countDocuments({}),
+      View.countDocuments({ userId: { $ne: null } }),
+      View.countDocuments({ userId: null }),
+      View.aggregate([
+        {
+          $group: {
+            _id: '$contentType',
+            total: { $sum: 1 },
+            authenticated: {
+              $sum: {
+                $cond: [{ $ne: ['$userId', null] }, 1, 0]
+              }
+            },
+            anonymous: {
+              $sum: {
+                $cond: [{ $eq: ['$userId', null] }, 1, 0]
+              }
+            }
+          }
+        }
+      ])
+    ]);
+
+    const normalized = {
+      article: { total: 0, authenticated: 0, anonymous: 0 },
+      book: { total: 0, authenticated: 0, anonymous: 0 },
+      dissertation: { total: 0, authenticated: 0, anonymous: 0 }
+    };
+
+    byContentType.forEach((item) => {
+      if (normalized[item._id]) {
+        normalized[item._id] = {
+          total: item.total || 0,
+          authenticated: item.authenticated || 0,
+          anonymous: item.anonymous || 0
+        };
+      }
+    });
+
+    res.json({
+      total,
+      authenticated,
+      anonymous,
+      byContentType: normalized
+    });
+  } catch (error) {
+    logger.error('Get view summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch view summary' });
+  }
+});
 
 // Получить статистику просмотров
 router.get('/stats/:contentType/:contentId', async (req, res) => {
