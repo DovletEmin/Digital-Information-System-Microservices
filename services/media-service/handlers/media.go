@@ -77,8 +77,8 @@ func (h *MediaHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	// Генерируем URL для доступа
-	fileURL := fmt.Sprintf("http://%s/%s/%s", h.config.MinioEndpoint, h.config.MinioBucket, filename)
+	// Генерируем URL для доступа (используем публичный URL)
+	fileURL := fmt.Sprintf("%s/%s/%s", h.config.MinioPublicURL, h.config.MinioBucket, filename)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "File uploaded successfully",
@@ -156,7 +156,7 @@ func (h *MediaHandler) UploadMultipleFiles(c *gin.Context) {
 			continue
 		}
 
-		fileURL := fmt.Sprintf("http://%s/%s/%s", h.config.MinioEndpoint, h.config.MinioBucket, filename)
+		fileURL := fmt.Sprintf("%s/%s/%s", h.config.MinioPublicURL, h.config.MinioBucket, filename)
 
 		results = append(results, gin.H{
 			"filename":      filename,
