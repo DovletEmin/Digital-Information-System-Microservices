@@ -228,6 +228,17 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
+// CountUsers - количество пользователей
+func (h *AuthHandler) CountUsers(c *gin.Context) {
+	var count int64
+	if err := h.db.Model(&models.User{}).Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users count"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"total": count})
+}
+
 // ListUsers - список всех пользователей (admin)
 func (h *AuthHandler) ListUsers(c *gin.Context) {
 	var users []models.User

@@ -27,6 +27,7 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
 			protected.GET("/me", authHandler.GetCurrentUser)
 			protected.PUT("/me", authHandler.UpdateProfile)
 			protected.POST("/logout", authHandler.Logout)
+			protected.GET("/users/count", authHandler.CountUsers)
 		}
 
 		// Admin маршруты
