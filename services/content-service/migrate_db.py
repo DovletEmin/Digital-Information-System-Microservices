@@ -42,8 +42,11 @@ def ensure_columns():
                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type};"))
 
     add_column_if_missing("articles", "authors_workplace", "VARCHAR(255)")
+    add_column_if_missing("articles", "thumbnail", "VARCHAR(500)")
     add_column_if_missing("books", "authors_workplace", "VARCHAR(255)")
+    add_column_if_missing("books", "thumbnail", "VARCHAR(500)")
     add_column_if_missing("dissertations", "authors_workplace", "VARCHAR(255)")
+    add_column_if_missing("dissertations", "thumbnail", "VARCHAR(500)")
 
 if __name__ == "__main__":
     create_tables()
