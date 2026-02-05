@@ -6,12 +6,14 @@ import { useForm } from 'react-hook-form';
 import { dissertationService } from '@/services/dissertationService';
 import { categoryService } from '@/services/categoryService';
 import { CreateDissertationDto, Category } from '@/types';
+import ImageUpload from '@/components/ImageUpload';
 
 export default function NewDissertationPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategoryId, setParentCategoryId] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateDissertationDto>();
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function NewDissertationPage() {
         author: cleanText(data.author),
         content: cleanText(data.content),
         authors_workplace: data.authors_workplace ? cleanText(data.authors_workplace) : undefined,
+        thumbnail: thumbnailUrl || data.thumbnail,
         category_ids: finalCategoryIds,
         publication_date: normalizePublicationDate(data.publication_date),
         language: data.language || 'tm',
@@ -90,7 +93,12 @@ export default function NewDissertationPage() {
       setLoading(false);
     }
   };
+handleThumbnailChange = (url: string) => {
+    setThumbnailUrl(url);
+    setValue('thumbnail', url);
+  };
 
+  const 
   const parentCategories = categories.filter((category) => !category.parent_id);
   const subCategories = categories.filter((category) => category.parent_id === parentCategoryId);
 
@@ -133,7 +141,12 @@ export default function NewDissertationPage() {
                 type="text"
                 {...register('authors_workplace')}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
-              />
+              />Thumbnail Image</label>
+            <ImageUpload onUploadComplete={handleThumbnailChange} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
             </div>
           </div>
 
