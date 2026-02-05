@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { articleService } from '@/services/articleService';
+import { bookService } from '@/services/bookService';
 import { categoryService } from '@/services/categoryService';
-import { CreateArticleDto, Category } from '@/types';
+import { CreateBookDto, Category } from '@/types';
 import ImageUpload from '@/components/ImageUpload';
 
-export default function NewArticlePage() {
+export default function NewBookPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [parentCategoryId, setParentCategoryId] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateArticleDto>();
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateBookDto>();
 
   useEffect(() => {
     fetchCategories();
@@ -21,14 +22,14 @@ export default function NewArticlePage() {
 
   const fetchCategories = async () => {
     try {
-      const data = await categoryService.getArticleCategories();
+      const data = await categoryService.getBookCategories();
       setCategories(data);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     }
   };
 
-  const onSubmit = async (data: CreateArticleDto) => {
+  const onSubmit = async (data: CreateBookDto) => {
     try {
       setLoading(true);
       
@@ -64,6 +65,11 @@ export default function NewArticlePage() {
         return value;
       };
 
+      const selectedSubcategoryIds = normalizeCategoryIds(data.category_ids);
+      const finalCategoryIds = parentCategoryId
+        ? Array.from(new Set([parentCategoryId, ...selectedSubcategoryIds]))
+        : selectedSubcategoryIds;
+
       // Преобразуем category_ids в массив чисел
       const formattedData = {
         ...data,
@@ -71,18 +77,18 @@ export default function NewArticlePage() {
         author: cleanText(data.author),
         content: cleanText(data.content),
         authors_workplace: data.authors_workplace ? cleanText(data.authors_workplace) : undefined,
-        thumbnail: thumbnailUrl || data.thumbnail, // Используем загруженное изображение
-        category_ids: normalizeCategoryIds(data.category_ids),
+        thumbnail: thumbnailUrl || data.thumbnail,
+        category_ids: finalCategoryIds,
         publication_date: normalizePublicationDate(data.publication_date),
         language: data.language || 'tm',
         type: data.type || 'local',
       };
       
-      await articleService.create(formattedData);
-      router.push('/dashboard/articles');
+      await bookService.create(formattedData);
+      router.push('/dashboard/books');
     } catch (error) {
-      console.error('Failed to create article:', error);
-      alert('Failed to create article');
+      console.error('Failed to create book:', error);
+      alert('Failed to create book');
     } finally {
       setLoading(false);
     }
@@ -93,9 +99,18 @@ export default function NewArticlePage() {
     setValue('thumbnail', url);
   };
 
+  const parentCategories = categories.filter((category) => !category.parent_id);
+  const subCategories = categories.filter((category) => category.parent_id === parentCategoryId);
+
+  const handleParentCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextValue = event.target.value ? Number(event.target.value) : '';
+    setParentCategoryId(nextValue);
+    setValue('category_ids', [] as any);
+  };
+
   return (
     <div>
-      <h1 className="mb-6 text-3xl font-bold text-gray-900">New Article</h1>
+      <h1 className="mb-6 text-3xl font-bold text-gray-900">New Book</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="rounded-lg bg-white p-6 shadow">
         <div className="space-y-6">
@@ -186,19 +201,40 @@ export default function NewArticlePage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Category</label>
-            <select
-              {...register('category_ids')}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
-            >
-              <option value="">Select category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Main Category</label>
+              <select
+                value={parentCategoryId}
+                onChange={handleParentCategoryChange}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+              >
+                <option value="">Select main category</option>
+                {parentCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Subcategories</label>
+              <select
+                multiple
+                {...register('category_ids')}
+                disabled={!parentCategoryId}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 disabled:bg-gray-100"
+                size={5}
+              >
+                {subCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-sm text-gray-500">Select main category to enable</p>
+            </div>
           </div>
 
           <div className="flex space-x-4">
@@ -207,7 +243,7 @@ export default function NewArticlePage() {
               disabled={loading}
               className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? 'Creating...' : 'Create Article'}
+              {loading ? 'Creating...' : 'Create Book'}
             </button>
             <button
               type="button"

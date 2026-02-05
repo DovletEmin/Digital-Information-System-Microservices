@@ -29,8 +29,8 @@ export const dissertationService = {
   },
 
   search: async (query: string, page = 1, perPage = 10) => {
-    const { data } = await api.get<PaginatedResponse<Dissertation>>('/api/v1/dissertations/search', {
-      params: { q: query, page, per_page: perPage },
+    const { data } = await api.get<PaginatedResponse<Dissertation>>('/api/v1/dissertations', {
+      params: { search: query, page, per_page: perPage },
     });
     return data;
   },

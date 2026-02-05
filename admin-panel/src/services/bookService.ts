@@ -29,8 +29,8 @@ export const bookService = {
   },
 
   search: async (query: string, page = 1, perPage = 10) => {
-    const { data } = await api.get<PaginatedResponse<Book>>('/api/v1/books/search', {
-      params: { q: query, page, per_page: perPage },
+    const { data } = await api.get<PaginatedResponse<Book>>('/api/v1/books', {
+      params: { search: query, page, per_page: perPage },
     });
     return data;
   },

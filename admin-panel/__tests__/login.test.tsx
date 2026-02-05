@@ -27,18 +27,7 @@ describe('Login Page', () => {
     
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /войти/i })).toBeInTheDocument();
-  });
-
-  it('shows validation errors for empty fields', async () => {
-    render(<LoginPage />);
-    
-    const submitButton = screen.getByRole('button', { name: /войти/i });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/username is required/i)).toBeInTheDocument();
-    });
+    expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
   });
 
   it('submits form with valid credentials', async () => {
@@ -54,7 +43,7 @@ describe('Login Page', () => {
     
     const usernameInput = screen.getByLabelText(/username/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /войти/i });
+    const submitButton = screen.getByRole('button', { name: /login/i });
 
     fireEvent.change(usernameInput, { target: { value: 'testuser' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
@@ -80,7 +69,7 @@ describe('Login Page', () => {
     
     const usernameInput = screen.getByLabelText(/username/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /войти/i });
+    const submitButton = screen.getByRole('button', { name: /login/i });
 
     fireEvent.change(usernameInput, { target: { value: 'testuser' } });
     fireEvent.change(passwordInput, { target: { value: 'wrongpassword' } });

@@ -165,17 +165,17 @@ export default function ArticlesPage() {
               disabled={page === 1}
               className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
-              Previous
+              Öňki
             </button>
             <span className="text-sm text-gray-700">
-              Page {page} of {totalPages}
+              Sahypa {page} / {totalPages}
             </span>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page === totalPages}
               className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
-              Next
+              Indiki
             </button>
           </div>
         </div>

@@ -31,7 +31,12 @@ export default function LoginPage() {
       localStorage.setItem('token', token);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Login failed');
+      setError(
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Login failed'
+      );
     } finally {
       setLoading(false);
     }
@@ -53,10 +58,11 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="login-username" className="block text-sm font-medium text-gray-700">
                 Username
               </label>
               <input
+                id="login-username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -66,10 +72,11 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
