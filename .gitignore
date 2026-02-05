@@ -34,6 +34,7 @@ pip-log.txt
 # Build outputs
 dist/
 build/
+.next/
 *.exe
 *.dll
 *.so
@@ -74,3 +75,7 @@ volumes/
 tmp/
 temp/
 *.tmp
+
+*.sh
+*.ps1
+systemd/
