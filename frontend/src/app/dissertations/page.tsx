@@ -276,9 +276,9 @@ export default function DissertationsPage() {
               Awtoreferatlar
             </button>
             <button
-              onClick={() => setActiveCategoryTab('Dissertasiyalar')}
+              onClick={() => setActiveCategoryTab('Dissertasiýalar')}
               className={`pb-3 text-sm font-medium transition-colors relative ${
-                activeCategoryTab === 'Dissertasiyalar'
+                activeCategoryTab === 'Dissertasiýalar'
                   ? 'text-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gray-900'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -327,28 +327,28 @@ export default function DissertationsPage() {
             ) : (
               <>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Fizika-Matematika</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Fizika-Matematika</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Himiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Biologiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Tehnika</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Oba-hojalyk</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Taryh we arheologiýa</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Taryh we arheologiýa</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Ykdysadyýet</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Ykdysadyýet</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Filosofiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Filologiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Hukuk</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Pedagogika</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Lukmançylyk</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Lukmançylyk</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Sungaty öwreniş</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Sungaty öwreniş</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Psihologiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Sosiologiýa</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Syýasýýet</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Medeniýeti öwreniş</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Ýer baradaky ylymlar</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">Ýer baradaky ylymlar</button> */}
                 </div>
               </>
             )}
