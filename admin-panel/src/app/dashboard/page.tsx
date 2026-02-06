@@ -338,14 +338,14 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between rounded-xl bg-sky-50 px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-sky-700">
                 <ShieldCheck className="h-4 w-4" />
-                Girmekli seredişler
+                Girişli seredişler
               </div>
               <span className="text-sm font-semibold text-sky-900">{formatNumber(stats.traffic.authenticated)}</span>
             </div>
             <div className="flex items-center justify-between rounded-xl bg-orange-50 px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-orange-700">
                 <ShieldOff className="h-4 w-4" />
-                Girmesiz seredişler
+                Girişsiz seredişler
               </div>
               <span className="text-sm font-semibold text-orange-900">{formatNumber(stats.traffic.anonymous)}</span>
             </div>
@@ -364,17 +364,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="rounded-2xl bg-white shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">Kontent boýunça giňişleýin görkeziji</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-6">Kontentlar boýunça giňişleýin maglumat</h2>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {[
             { title: 'Makalalar', data: stats.articles },
-            { title: 'Kitaplar', data: stats.books },
-            { title: 'Dissertasiýalar', data: stats.dissertations }
+            { title: 'Dissertasiýalar', data: stats.dissertations },
+            { title: 'Kitaplar', data: stats.books }
           ].map((block) => (
             <div key={block.title} className="rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-900">{block.title}</h3>
-                <span className="text-xs text-gray-500">{formatNumber(block.data.total)} kontent</span>
+                <span className="text-xs text-gray-500">{formatNumber(block.data.total)} sany</span>
               </div>
               <div className="space-y-3 text-sm text-gray-600">
                 <div className="flex items-center justify-between">
