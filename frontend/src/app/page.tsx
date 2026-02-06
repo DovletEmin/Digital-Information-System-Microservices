@@ -196,24 +196,24 @@ export default function HomePage() {
             ) : (
               <>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Taryh</button>
+                  {/* <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Taryh</button>
                   <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Filologiýa</button>
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Filosofiýa</button>
+                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Filosofiýa</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Ykdysadyýet</button>
+                  {/* <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Ykdysadyýet</button>
                   <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Oba hojalyk</button>
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Weterinariya</button>
+                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Weterinariya</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Himiýa</button>
+                  {/* <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Himiýa</button>
                   <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Biologiýa</button>
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Geologiýa</button>
+                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Geologiýa</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Geografiýa</button>
+                  {/* <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Geografiýa</button>
                   <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Pedagogika</button>
-                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Psihologiýa</button>
+                  <button className="block w-full text-left text-gray-700 hover:text-primary transition-colors text-base">Psihologiýa</button> */}
                 </div>
               </>
             )}

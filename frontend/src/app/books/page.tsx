@@ -208,16 +208,16 @@ export default function BooksPage() {
             </button>
             <button
               onClick={() => {
-                setActiveCategoryTab('baska kitaplar');
+                setActiveCategoryTab('başga kitaplar');
                 setSelectedCategory(null);
               }}
               className={`pb-3 text-sm font-medium transition-colors relative ${
-                activeCategoryTab === 'baska kitaplar'
+                activeCategoryTab === 'başga kitaplar'
                   ? 'text-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gray-900'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Baska kitaplar
+              Başga kitaplar
             </button>
           </div>
         </div>
@@ -258,31 +258,31 @@ export default function BooksPage() {
             ) : (
               <>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDU</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDU</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TMDDI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">HS we TU</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">HYY we ÖU</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TMK</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDLU</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TITU</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TITU</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TOHU</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TOHU</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDMI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDB we SI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDBGI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDMal</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDMI</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TT we II</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TT we II</button> */}
                 </div>
                 <div className="space-y-2">
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDY we DI</button>
+                  {/* <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDY we DI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TOHI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDMHGI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDÇA</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TDEI</button>
                   <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">TIT we UKI</button>
-                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">HNGU</button>
+                  <button className="block w-full text-left text-gray-900 hover:text-primary transition-colors text-base">HNGU</button> */}
                 </div>
               </>
             )}
