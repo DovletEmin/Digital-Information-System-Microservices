@@ -42,7 +42,7 @@ export default function FileUpload({
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
