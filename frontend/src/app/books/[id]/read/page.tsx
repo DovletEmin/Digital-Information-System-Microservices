@@ -82,7 +82,7 @@ export default function BookReadPage() {
 
   const loadProgress = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/books/${bookId}/progress`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -105,7 +105,7 @@ export default function BookReadPage() {
     try {
       const progressPercentage = (page / totalPages) * 100;
       
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/books/${bookId}/progress`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

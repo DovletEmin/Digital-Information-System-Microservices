@@ -127,6 +127,28 @@ app.use('/api/v1/books', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    
+    // Forward auth token as X-User-ID header for authenticated endpoints
+    if (req.headers.authorization) {
+      const token = req.headers.authorization.replace('Bearer ', '');
+      // For progress endpoints, we need to forward the user ID
+      // The auth middleware should have already validated the token
+      if (req.path.includes('/progress')) {
+        // Extract user ID from token if available
+        try {
+          const base64Payload = token.split('.')[1];
+          const payload = Buffer.from(base64Payload, 'base64').toString();
+          const decoded = JSON.parse(payload);
+          if (decoded.user_id) {
+            proxyReq.setHeader('X-User-ID', decoded.user_id);
+          }
+        } catch (e) {
+          // If decoding fails, continue without X-User-ID
+          logger.warn('Failed to decode token for X-User-ID');
+        }
+      }
+    }
+    
     if (req.body && Object.keys(req.body).length > 0) {
       const bodyData = JSON.stringify(req.body);
       proxyReq.setHeader('Content-Type', 'application/json');

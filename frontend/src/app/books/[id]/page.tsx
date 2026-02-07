@@ -140,11 +140,31 @@ export default function BookDetailsPage() {
     }
 
     try {
-      // Open file in new tab for download
-      window.open(fileUrl, '_blank');
+      // Fetch the file as blob
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      
+      // Create download link with proper filename
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${book.title}.${fileType}`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download:', error);
-      alert('Ýükläp almak başartmady');
+      // Fallback: try opening in new tab
+      try {
+        window.open(fileUrl, '_blank');
+      } catch (e) {
+        alert('Ýükläp almak başartmady');
+      }
     }
   };
 
@@ -195,7 +215,7 @@ export default function BookDetailsPage() {
   }
 
   const hasFiles = book.pdf_file_url || book.epub_file_url;
-  const canRead = hasFiles || book.content;
+  const canRead = book.content && book.content.trim().length > 0;
 
   return (
     <div className="min-h-screen bg-background">
