@@ -114,7 +114,7 @@ export default function BookDetailsPage() {
 
     try {
       if (isSaved) {
-        await savedService.removeBook(bookId);
+        await savedService.unsaveBook(bookId);
         setIsSaved(false);
       } else {
         await savedService.saveBook(bookId);
