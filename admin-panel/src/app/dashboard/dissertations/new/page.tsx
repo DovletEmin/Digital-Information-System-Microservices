@@ -93,12 +93,12 @@ export default function NewDissertationPage() {
       setLoading(false);
     }
   };
-handleThumbnailChange = (url: string) => {
+
+  const handleThumbnailChange = (url: string) => {
     setThumbnailUrl(url);
     setValue('thumbnail', url);
   };
 
-  const 
   const parentCategories = categories.filter((category) => !category.parent_id);
   const subCategories = categories.filter((category) => category.parent_id === parentCategoryId);
 
@@ -141,13 +141,20 @@ handleThumbnailChange = (url: string) => {
                 type="text"
                 {...register('authors_workplace')}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
-              />Thumbnail Image</label>
-            <ImageUpload onUploadComplete={handleThumbnailChange} />
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail Image</label>
+            <ImageUpload
+              value={thumbnailUrl}
+              onChange={handleThumbnailChange}
+              onError={(error) => alert(error)}
+            />
+            <p className="mt-2 text-sm text-gray-500">
+              Upload an image or leave empty to use default
+            </p>
           </div>
 
           <div>
