@@ -4,7 +4,6 @@ from typing import List, Optional
 from database import get_db
 from models import Book, BookCategory, BookReadingProgress
 from schemas import BookCreate, BookUpdate, BookResponse, BookReadingProgressCreate, BookReadingProgressUpdate, BookReadingProgressResponse
-from request_middleware import get_current_user_id
 import math
 
 router = APIRouter()
@@ -192,10 +191,12 @@ async def delete_book(book_id: int, db: Session = Depends(get_db)):
 @router.get("/books/{book_id}/progress")
 async def get_reading_progress(
     book_id: int,
-    user_id: str = Depends(get_current_user_id),
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
     db: Session = Depends(get_db)
 ):
     """Получение прогресса чтения книги для текущего пользователя"""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
     progress = db.query(BookReadingProgress).filter(
         BookReadingProgress.book_id == book_id,
         BookReadingProgress.user_id == user_id
@@ -227,10 +228,13 @@ async def get_reading_progress(
 async def save_reading_progress(
     book_id: int,
     progress_data: BookReadingProgressCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
     db: Session = Depends(get_db)
 ):
     """Сохранение или обновление прогресса чтения книги"""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
     # Проверяем, существует ли книга
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
