@@ -47,7 +47,7 @@ export default function FileUpload({
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/media/upload`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/media/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
