@@ -76,12 +76,15 @@ class BookBase(BaseModel):
     author: str = Field(..., max_length=255)
     authors_workplace: Optional[str] = None
     thumbnail: Optional[str] = None
-    content: str
+    description: Optional[str] = None  # описание книги
+    content: Optional[str] = None  # текстовый контент (необязательно, для совместимости)
+    pdf_file_url: Optional[str] = None  # URL PDF файла
+    epub_file_url: Optional[str] = None  # URL EPUB файла
     publication_date: Optional[datetime] = None
     language: str = "tm"  # tm, ru, en
     type: str = "local"  # local, foreign
     
-    @field_validator('content', 'title', 'author', mode='before')
+    @field_validator('content', 'title', 'author', 'description', mode='before')
     @classmethod
     def clean_text(cls, v):
         if isinstance(v, str):
@@ -96,6 +99,9 @@ class BookUpdate(BookBase):
     title: Optional[str] = None
     author: Optional[str] = None
     content: Optional[str] = None
+    description: Optional[str] = None
+    pdf_file_url: Optional[str] = None
+    epub_file_url: Optional[str] = None
     category_ids: Optional[List[int]] = None
 
 class BookResponse(BookBase):
@@ -272,6 +278,34 @@ class DissertationHighlightResponse(BaseModel):
     end_offset: int
     color: str
     note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Book Reading Progress Schemas
+class BookReadingProgressCreate(BaseModel):
+    book_id: int
+    current_page: int = 1
+    total_pages: Optional[int] = None
+    progress_percentage: float = 0.0
+    last_position: Optional[str] = None  # JSON string with position data
+
+class BookReadingProgressUpdate(BaseModel):
+    current_page: Optional[int] = None
+    total_pages: Optional[int] = None
+    progress_percentage: Optional[float] = None
+    last_position: Optional[str] = None
+
+class BookReadingProgressResponse(BaseModel):
+    id: int
+    user_id: str
+    book_id: int
+    current_page: int
+    total_pages: Optional[int]
+    progress_percentage: float
+    last_position: Optional[str]
     created_at: datetime
     updated_at: datetime
 

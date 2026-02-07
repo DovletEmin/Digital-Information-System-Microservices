@@ -29,7 +29,10 @@ export interface Book {
   author: string;
   authors_workplace?: string;
   thumbnail?: string;
-  content: string;
+  description?: string;
+  content?: string;
+  pdf_file_url?: string;
+  epub_file_url?: string;
   publication_date?: string;
   language: 'tm' | 'ru' | 'en';
   type: 'local' | 'foreign';
@@ -78,7 +81,10 @@ export interface CreateBookDto {
   author: string;
   authors_workplace?: string;
   thumbnail?: string;
-  content: string;
+  description?: string;
+  content?: string;
+  pdf_file_url?: string;
+  epub_file_url?: string;
   publication_date?: string;
   language: 'tm' | 'ru' | 'en';
   type: 'local' | 'foreign';

@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Eye, Bookmark, Star } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, Bookmark, Star } from 'lucide-react';
 import { bookService } from '@/services/bookService';
-import { savedService, BookHighlight } from '@/services/savedService';
+import { savedService } from '@/services/savedService';
 import { ratingService } from '@/services/ratingService';
 import { viewService } from '@/services/viewService';
 import { Book } from '@/types';
+import Image from 'next/image';
 
-export default function BookPage() {
+export default function BookDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const bookId = Number(params.id);
@@ -18,10 +19,6 @@ export default function BookPage() {
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [highlights, setHighlights] = useState<BookHighlight[]>([]);
-  const [currentHighlight, setCurrentHighlight] = useState<{ start: number; end: number; text: string } | null>(null);
-  const [selectedHighlightIds, setSelectedHighlightIds] = useState<number[]>([]);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [rating, setRating] = useState(0);
   const [myRating, setMyRating] = useState<number | null>(null);
@@ -72,14 +69,12 @@ export default function BookPage() {
   useEffect(() => {
     if (!authToken) {
       setIsSaved(false);
-      setHighlights([]);
       setMyRating(null);
       setRating(0);
       return;
     }
 
     checkIfSaved();
-    loadHighlights();
     loadMyRating();
   }, [authToken, bookId]);
 
@@ -99,37 +94,27 @@ export default function BookPage() {
     try {
       const saved = await savedService.checkIfBookSaved(bookId);
       setIsSaved(saved);
-    } catch {
-      // not authenticated
-    }
-  };
-
-  const loadHighlights = async () => {
-    try {
-      const data = await savedService.getBookHighlights(bookId);
-      setHighlights(data);
-    } catch {
-      // not authenticated
+    } catch (error) {
+      console.error('Failed to check if book is saved:', error);
     }
   };
 
   const loadMyRating = async () => {
     try {
-      const data = await ratingService.getMyRating('book', bookId);
-      if (data && typeof data.rating === 'number') {
-        setMyRating(data.rating);
-        setRating(data.rating);
-      }
-    } catch {
-      // not authenticated
+      const userRating = await ratingService.getMyRating('book', bookId);
+      setMyRating(userRating);
+      setRating(userRating || 0);
+    } catch (error) {
+      console.error('Failed to load rating:', error);
     }
   };
 
-  const handleSave = async () => {
+  const handleToggleSave = async () => {
+    if (!ensureAuth()) return;
+
     try {
-      if (!ensureAuth()) return;
       if (isSaved) {
-        await savedService.unsaveBook(bookId);
+        await savedService.removeBook(bookId);
         setIsSaved(false);
       } else {
         await savedService.saveBook(bookId);
@@ -140,124 +125,27 @@ export default function BookPage() {
     }
   };
 
-  const getTextOffset = (root: Node, target: Node, offset: number): number => {
-    let textOffset = 0;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-
-    let currentNode = walker.nextNode();
-    while (currentNode) {
-      if (currentNode === target) {
-        return textOffset + offset;
-      }
-      textOffset += currentNode.textContent?.length || 0;
-      currentNode = walker.nextNode();
-    }
-
-    return textOffset;
+  const handleRead = () => {
+    // Navigate to reading page
+    router.push(`/books/${bookId}/read`);
   };
 
-  const handleTextSelection = () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    if (!token) {
-      window.getSelection()?.removeAllRanges();
-      setShowColorPicker(false);
+  const handleDownload = async (fileType: 'pdf' | 'epub') => {
+    if (!book) return;
+    
+    const fileUrl = fileType === 'pdf' ? book.pdf_file_url : book.epub_file_url;
+    if (!fileUrl) {
+      alert(`${fileType.toUpperCase()} faýly ýok`);
       return;
     }
-    const selection = window.getSelection();
-    if (selection && selection.toString().length > 0) {
-      const text = selection.toString();
-      const range = selection.getRangeAt(0);
-      const contentElement = document.getElementById('book-content');
-
-      if (contentElement && contentElement.contains(range.commonAncestorContainer)) {
-        const startOffset = getTextOffset(contentElement, range.startContainer, range.startOffset);
-        const endOffset = startOffset + text.length;
-        const overlappingHighlights = highlights.filter(
-          (highlight) => highlight.start_offset < endOffset && highlight.end_offset > startOffset
-        );
-
-        setCurrentHighlight({ start: startOffset, end: endOffset, text });
-        setSelectedHighlightIds(overlappingHighlights.map((highlight) => highlight.id));
-        setShowColorPicker(true);
-      }
-    }
-  };
-
-  const handleHighlight = async (color: string) => {
-    if (!currentHighlight) return;
 
     try {
-      if (selectedHighlightIds.length > 0) {
-        await Promise.all(
-          selectedHighlightIds.map((id) => savedService.updateBookHighlight(id, { color }))
-        );
-      } else {
-        await savedService.createBookHighlight({
-          book_id: bookId,
-          text: currentHighlight.text,
-          start_offset: currentHighlight.start,
-          end_offset: currentHighlight.end,
-          color,
-        });
-      }
-
-      await loadHighlights();
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
+      // Open file in new tab for download
+      window.open(fileUrl, '_blank');
     } catch (error) {
-      console.error('Failed to create highlight:', error);
+      console.error('Failed to download:', error);
+      alert('Ýükläp almak başartmady');
     }
-  };
-
-  const handleClearHighlight = async () => {
-    if (selectedHighlightIds.length === 0) {
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
-      return;
-    }
-    try {
-      await Promise.all(selectedHighlightIds.map((id) => savedService.deleteBookHighlight(id)));
-      await loadHighlights();
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
-    } catch (error) {
-      console.error('Failed to delete highlight:', error);
-    }
-  };
-
-  const applyHighlights = (content: string) => {
-    if (highlights.length === 0) return content;
-
-    const sortedHighlights = [...highlights].sort((a, b) => a.start_offset - b.start_offset);
-    let result = '';
-    let lastIndex = 0;
-
-    sortedHighlights.forEach((highlight) => {
-      if (highlight.start_offset < lastIndex) {
-        return;
-      }
-
-      result += content.slice(lastIndex, highlight.start_offset);
-
-      const colorClass = {
-        yellow: 'bg-yellow-200',
-        green: 'bg-green-200',
-        blue: 'bg-blue-200',
-        red: 'bg-red-200',
-      }[highlight.color] || 'bg-yellow-200';
-
-      result += `<mark class="${colorClass} px-1 rounded">${content.slice(highlight.start_offset, highlight.end_offset)}</mark>`;
-      lastIndex = highlight.end_offset;
-    });
-
-    result += content.slice(lastIndex);
-    return result;
   };
 
   const handleSubmitRating = async () => {
@@ -267,6 +155,8 @@ export default function BookPage() {
       await ratingService.setRating({ contentType: 'book', contentId: bookId, rating });
       setMyRating(rating);
       setShowRatingDialog(false);
+      // Refresh book data to get updated rating
+      await fetchBook();
     } catch (error) {
       console.error('Failed to set rating:', error);
     }
@@ -277,13 +167,12 @@ export default function BookPage() {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-    });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-lg">Ýüklenýär...</div>
+        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-300 border-t-primary"></div>
       </div>
     );
   }
@@ -304,41 +193,233 @@ export default function BookPage() {
     );
   }
 
+  const hasFiles = book.pdf_file_url || book.epub_file_url;
+  const canRead = hasFiles || book.content;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container-custom py-8">
+        {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
         >
           <ArrowLeft size={20} />
-          Yza
+          <span>Yza</span>
         </button>
 
-        <article className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm p-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            {book.title}
-          </h1>
+        {/* Main Content */}
+        <div className="bg-white rounded-2xl shadow-sm p-8 md:p-12">
+          <div className="grid md:grid-cols-[300px,1fr] gap-8 md:gap-12">
+            {/* Left: Thumbnail */}
+            <div className="flex justify-center md:justify-start">
+              <div className="relative w-full max-w-[300px] aspect-[3/4] rounded-xl overflow-hidden shadow-lg bg-gray-100">
+                {book.thumbnail ? (
+                  <Image
+                    src={book.thumbnail}
+                    alt={book.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 300px"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <BookOpen className="w-24 h-24 text-gray-300" />
+                  </div>
+                )}
+              </div>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-6 pb-6 border-b">
-            <div className="font-medium">{book.author}</div>
-            {book.authors_workplace && (
-              <>
-                <span>|</span>
-                <div>{book.authors_workplace}</div>
-              </>
-            )}
-            {book.publication_date && (
-              <>
-                <span>|</span>
-                <div className="flex items-center gap-1">
-                  <Eye size={16} />
-                  {book.views}
+            {/* Right: Book Info */}
+            <div className="flex flex-col">
+              {/* Title and Metadata */}
+              <div className="mb-6">
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                  {book.title}
+                </h1>
+                
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">Awtor:</span>
+                    <span>{book.author}</span>
+                  </div>
+                  {book.authors_workplace && (
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">Iş ýeri:</span>
+                      <span>{book.authors_workplace}</span>
+                    </div>
+                  )}
+                  {book.publication_date && (
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">Çap edilen:</span>
+                      <span>{formatDate(book.publication_date)}</span>
+                    </div>
+                  )}
                 </div>
-                <span>|</span>
-                <div>{formatDate(book.publication_date)}</div>
-              </>
-            )}
+
+                {/* Rating */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={20}
+                          className={`${
+                            star <= Math.round(book.average_rating)
+                              ? 'fill-yellow-400 text-yellow-400'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      {book.average_rating.toFixed(1)} ({book.rating_count} baha)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (ensureAuth()) setShowRatingDialog(true);
+                    }}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {myRating ? 'Bahany üýtget' : 'Baha ber'}
+                  </button>
+                </div>
+
+                {/* Categories */}
+                {book.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {book.categories.map((category) => (
+                      <span
+                        key={category.id}
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full"
+                      >
+                        {category.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {book.description && (
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-3">Düşündiriş</h2>
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {book.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 mt-auto">
+                {canRead && (
+                  <button
+                    onClick={handleRead}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  >
+                    <BookOpen size={20} />
+                    <span>Oka</span>
+                  </button>
+                )}
+
+                {book.pdf_file_url && (
+                  <button
+                    onClick={() => handleDownload('pdf')}
+                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    <Download size={20} />
+                    <span>PDF Ýükle</span>
+                  </button>
+                )}
+
+                {book.epub_file_url && (
+                  <button
+                    onClick={() => handleDownload('epub')}
+                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    <Download size={20} />
+                    <span>EPUB Ýükle</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleToggleSave}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors font-medium ${
+                    isSaved
+                      ? 'bg-primary/10 text-primary border-2 border-primary'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  <Bookmark size={20} className={isSaved ? 'fill-current' : ''} />
+                  <span>{isSaved ? 'Saklanan' : 'Sakla'}</span>
+                </button>
+              </div>
+
+              {/* File Info */}
+              {hasFiles && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Elýeterli formatlar:</span>
+                    {book.pdf_file_url && ' PDF'}
+                    {book.pdf_file_url && book.epub_file_url && ','}
+                    {book.epub_file_url && ' EPUB'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Rating Dialog */}
+      {showRatingDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowRatingDialog(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Kitaba baha ber</h3>
+            
+            <div className="flex justify-center gap-2 mb-6">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  className="transition-transform hover:scale-110"
+                >
+                  <Star
+                    size={40}
+                    className={`${
+                      star <= rating
+                        ? 'fill-yellow-400 text-yellow-400'
+                        : 'text-gray-300 hover:text-yellow-400'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRatingDialog(false)}
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Goýbolsun et
+              </button>
+              <button
+                onClick={handleSubmitRating}
+                disabled={rating === 0}
+                className="flex-1 px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Tassykla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
             {book.categories && book.categories.length > 0 && (
               <>
                 <span>|</span>

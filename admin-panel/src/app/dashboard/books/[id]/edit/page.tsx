@@ -7,6 +7,7 @@ import { bookService } from '@/services/bookService';
 import { categoryService } from '@/services/categoryService';
 import { CreateBookDto, Category } from '@/types';
 import ImageUpload from '@/components/ImageUpload';
+import FileUpload from '@/components/FileUpload';
 
 export default function EditBookPage() {
   const params = useParams();
@@ -15,6 +16,8 @@ export default function EditBookPage() {
   const [parentCategoryId, setParentCategoryId] = useState<number | ''>('');
   const [loading, setLoading] = useState(true);
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
+  const [pdfFileUrl, setPdfFileUrl] = useState<string>('');
+  const [epubFileUrl, setEpubFileUrl] = useState<string>('');
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<CreateBookDto>();
 
   useEffect(() => {
@@ -29,11 +32,14 @@ export default function EditBookPage() {
         setValue('title', book.title);
         setValue('author', book.author);
         setValue('authors_workplace', book.authors_workplace || '');
+        setValue('description', (book as any).description || '');
         setValue('content', book.content);
         setValue('language', book.language);
         setValue('type', book.type);
         setValue('thumbnail', book.thumbnail || '');
         setThumbnailUrl(book.thumbnail || '');
+        setPdfFileUrl((book as any).pdf_file_url || '');
+        setEpubFileUrl((book as any).epub_file_url || '');
         const selectedSubcategoryIds = book.categories.filter((c) => c.parent_id).map((c) => c.id);
         const selectedParentId =
           book.categories.find((c) => c.parent_id)?.parent_id ||
@@ -86,6 +92,9 @@ export default function EditBookPage() {
       const formattedData = {
         ...data,
         thumbnail: thumbnailUrl || data.thumbnail,
+        description: (data as any).description,
+        pdf_file_url: pdfFileUrl || undefined,
+        epub_file_url: epubFileUrl || undefined,
         category_ids: parentCategoryId
           ? Array.from(new Set([parentCategoryId, ...normalizeCategoryIds(data.category_ids)]))
           : normalizeCategoryIds(data.category_ids),
@@ -105,6 +114,14 @@ export default function EditBookPage() {
   const handleThumbnailChange = (url: string) => {
     setThumbnailUrl(url);
     setValue('thumbnail', url);
+  };
+
+  const handlePdfFileChange = (url: string) => {
+    setPdfFileUrl(url);
+  };
+
+  const handleEpubFileChange = (url: string) => {
+    setEpubFileUrl(url);
   };
 
   const parentCategories = categories.filter((category) => !category.parent_id);
@@ -164,13 +181,51 @@ export default function EditBookPage() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Content *</label>
+          <label className="block text-sm font-medium mb-2">Description</label>
           <textarea
-            {...register('content', { required: 'Content is required' })}
+            {...register('description')}
+            rows={4}
+            className="w-full border rounded px-3 py-2"
+            placeholder="Brief description of the book (optional)"
+          />
+          <p className="mt-1 text-sm text-gray-500">This will be shown on the book details page</p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Content (Text)</label>
+          <textarea
+            {...register('content')}
             rows={10}
             className="w-full border rounded px-3 py-2"
+            placeholder="Text content (optional if PDF/EPUB is provided)"
           />
-          {errors.content && <p className="text-red-500 text-sm mt-1">{errors.content.message}</p>}
+          <p className="mt-1 text-sm text-gray-500">Legacy text content - optional if you upload PDF/EPUB files</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">PDF File</label>
+            <FileUpload
+              value={pdfFileUrl}
+              onChange={handlePdfFileChange}
+              onError={(error) => alert(error)}
+              acceptedTypes={['.pdf']}
+              label="Upload PDF"
+              maxSizeMB={50}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">EPUB File</label>
+            <FileUpload
+              value={epubFileUrl}
+              onChange={handleEpubFileChange}
+              onError={(error) => alert(error)}
+              acceptedTypes={['.epub']}
+              label="Upload EPUB"
+              maxSizeMB={50}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">

@@ -84,7 +84,10 @@ class Book(Base):
     author = Column(String(255), nullable=False, index=True)
     authors_workplace = Column(String(255))
     thumbnail = Column(String(500))  # image URL
-    content = Column(Text, nullable=False)  # text, e-pub, pdf
+    description = Column(Text)  # описание книги (необязательное)
+    content = Column(Text)  # текстовый контент (необязательное, для совместимости)
+    pdf_file_url = Column(String(500))  # URL PDF файла
+    epub_file_url = Column(String(500))  # URL EPUB файла
     publication_date = Column(DateTime, index=True)
     language = Column(String(10), default="tm", index=True)  # tm, ru, en
     type = Column(String(10), default="local", index=True)  # local, foreign
@@ -199,5 +202,20 @@ class DissertationHighlight(Base):
     end_offset = Column(Integer, nullable=False)
     color = Column(String(20), default="yellow")
     note = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Прогресс чтения книги (закладки страниц)
+class BookReadingProgress(Base):
+    __tablename__ = "book_reading_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
+    book = relationship("Book")
+    current_page = Column(Integer, default=1, nullable=False)  # текущая страница
+    total_pages = Column(Integer)  # общее количество страниц (если известно)
+    progress_percentage = Column(Float, default=0.0)  # процент прочитанного
+    last_position = Column(Text)  # JSON с позицией в документе (для EPUB/PDF)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

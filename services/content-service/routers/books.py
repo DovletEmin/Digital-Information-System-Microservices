@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
-from models import Book, BookCategory
-from schemas import BookCreate, BookUpdate, BookResponse
+from models import Book, BookCategory, BookReadingProgress
+from schemas import BookCreate, BookUpdate, BookResponse, BookReadingProgressCreate, BookReadingProgressUpdate, BookReadingProgressResponse
+from request_middleware import get_current_user_id
 import math
 
 router = APIRouter()
@@ -44,7 +45,10 @@ async def list_books(
             "author": book.author,
             "authors_workplace": book.authors_workplace,
             "thumbnail": book.thumbnail,
+            "description": book.description,
             "content": book.content,
+            "pdf_file_url": book.pdf_file_url,
+            "epub_file_url": book.epub_file_url,
             "publication_date": book.publication_date,
             "language": book.language,
             "type": book.type,
@@ -81,7 +85,10 @@ async def get_book(book_id: int, db: Session = Depends(get_db)):
         "author": book.author,
         "authors_workplace": book.authors_workplace,
         "thumbnail": book.thumbnail,
+        "description": book.description,
         "content": book.content,
+        "pdf_file_url": book.pdf_file_url,
+        "epub_file_url": book.epub_file_url,
         "publication_date": book.publication_date,
         "language": book.language,
         "type": book.type,
@@ -113,7 +120,10 @@ async def create_book(book: BookCreate, db: Session = Depends(get_db)):
         "author": db_book.author,
         "authors_workplace": db_book.authors_workplace,
         "thumbnail": db_book.thumbnail,
+        "description": db_book.description,
         "content": db_book.content,
+        "pdf_file_url": db_book.pdf_file_url,
+        "epub_file_url": db_book.epub_file_url,
         "publication_date": db_book.publication_date,
         "language": db_book.language,
         "type": db_book.type,
@@ -150,7 +160,10 @@ async def update_book(book_id: int, book: BookUpdate, db: Session = Depends(get_
         "author": db_book.author,
         "authors_workplace": db_book.authors_workplace,
         "thumbnail": db_book.thumbnail,
+        "description": db_book.description,
         "content": db_book.content,
+        "pdf_file_url": db_book.pdf_file_url,
+        "epub_file_url": db_book.epub_file_url,
         "publication_date": db_book.publication_date,
         "language": db_book.language,
         "type": db_book.type,
@@ -174,3 +187,107 @@ async def delete_book(book_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Book deleted successfully"}
+
+# Reading Progress endpoints
+@router.get("/books/{book_id}/progress")
+async def get_reading_progress(
+    book_id: int,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Получение прогресса чтения книги для текущего пользователя"""
+    progress = db.query(BookReadingProgress).filter(
+        BookReadingProgress.book_id == book_id,
+        BookReadingProgress.user_id == user_id
+    ).first()
+    
+    if not progress:
+        # Возвращаем пустой прогресс, если еще не создан
+        return {
+            "book_id": book_id,
+            "current_page": 1,
+            "total_pages": None,
+            "progress_percentage": 0.0,
+            "last_position": None
+        }
+    
+    return {
+        "id": progress.id,
+        "user_id": progress.user_id,
+        "book_id": progress.book_id,
+        "current_page": progress.current_page,
+        "total_pages": progress.total_pages,
+        "progress_percentage": progress.progress_percentage,
+        "last_position": progress.last_position,
+        "created_at": progress.created_at,
+        "updated_at": progress.updated_at
+    }
+
+@router.post("/books/{book_id}/progress")
+async def save_reading_progress(
+    book_id: int,
+    progress_data: BookReadingProgressCreate,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Сохранение или обновление прогресса чтения книги"""
+    # Проверяем, существует ли книга
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    # Ищем существующий прогресс
+    existing_progress = db.query(BookReadingProgress).filter(
+        BookReadingProgress.book_id == book_id,
+        BookReadingProgress.user_id == user_id
+    ).first()
+    
+    if existing_progress:
+        # Обновляем существующий прогресс
+        existing_progress.current_page = progress_data.current_page
+        if progress_data.total_pages is not None:
+            existing_progress.total_pages = progress_data.total_pages
+        existing_progress.progress_percentage = progress_data.progress_percentage
+        if progress_data.last_position is not None:
+            existing_progress.last_position = progress_data.last_position
+        
+        db.commit()
+        db.refresh(existing_progress)
+        
+        return {
+            "id": existing_progress.id,
+            "user_id": existing_progress.user_id,
+            "book_id": existing_progress.book_id,
+            "current_page": existing_progress.current_page,
+            "total_pages": existing_progress.total_pages,
+            "progress_percentage": existing_progress.progress_percentage,
+            "last_position": existing_progress.last_position,
+            "created_at": existing_progress.created_at,
+            "updated_at": existing_progress.updated_at
+        }
+    else:
+        # Создаем новый прогресс
+        new_progress = BookReadingProgress(
+            user_id=user_id,
+            book_id=book_id,
+            current_page=progress_data.current_page,
+            total_pages=progress_data.total_pages,
+            progress_percentage=progress_data.progress_percentage,
+            last_position=progress_data.last_position
+        )
+        
+        db.add(new_progress)
+        db.commit()
+        db.refresh(new_progress)
+        
+        return {
+            "id": new_progress.id,
+            "user_id": new_progress.user_id,
+            "book_id": new_progress.book_id,
+            "current_page": new_progress.current_page,
+            "total_pages": new_progress.total_pages,
+            "progress_percentage": new_progress.progress_percentage,
+            "last_position": new_progress.last_position,
+            "created_at": new_progress.created_at,
+            "updated_at": new_progress.updated_at
+        }
