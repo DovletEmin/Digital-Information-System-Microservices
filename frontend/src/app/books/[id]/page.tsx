@@ -215,7 +215,7 @@ export default function BookDetailsPage() {
   }
 
   const hasFiles = book.pdf_file_url || book.epub_file_url;
-  const canRead = book.content && book.content.trim().length > 0;
+  const canRead = (book.content && book.content.trim().length > 0) || hasFiles;
 
   return (
     <div className="min-h-screen bg-background">
