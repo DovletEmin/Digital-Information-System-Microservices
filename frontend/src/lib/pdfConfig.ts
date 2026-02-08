@@ -1,6 +1,6 @@
 import { pdfjs } from 'react-pdf';
 
-// Configure PDF.js worker from CDN to avoid local worker 404s in Next.js
+// Serve worker from same origin to avoid path/CORS/mixed-content issues.
 if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+  pdfjs.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
 }
