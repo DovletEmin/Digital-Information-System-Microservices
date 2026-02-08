@@ -311,7 +311,7 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
     
     try:
         # Если это внешняя ссылка, проксируем запрос
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(book.pdf_file_url)
             response.raise_for_status()
             
@@ -337,7 +337,7 @@ async def download_book(book_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="PDF file not found for this book")
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(book.pdf_file_url)
             response.raise_for_status()
             

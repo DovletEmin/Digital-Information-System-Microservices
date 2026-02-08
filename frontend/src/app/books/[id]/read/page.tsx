@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { pdfjs } from 'react-pdf';
+import '@/lib/pdfConfig';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
@@ -19,13 +19,6 @@ const Page = dynamic(
   () => import('react-pdf').then((mod) => mod.Page),
   { ssr: false }
 );
-
-if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/legacy/build/pdf.worker.min.js',
-    import.meta.url
-  ).toString();
-}
 
 export default function BookReadPage() {
   const params = useParams();

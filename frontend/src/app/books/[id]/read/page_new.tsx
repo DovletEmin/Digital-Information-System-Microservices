@@ -7,6 +7,7 @@ import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
 import dynamic from 'next/dynamic';
+import '@/lib/pdfConfig';
 
 // Dynamic import to avoid SSR issues
 const Document = dynamic(() => import('react-pdf').then(mod => mod.Document), { ssr: false });
