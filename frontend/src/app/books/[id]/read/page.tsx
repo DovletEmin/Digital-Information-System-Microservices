@@ -22,7 +22,7 @@ const Page = dynamic(
 
 if (typeof window !== 'undefined') {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
+    'pdfjs-dist/legacy/build/pdf.worker.min.js',
     import.meta.url
   ).toString();
 }
