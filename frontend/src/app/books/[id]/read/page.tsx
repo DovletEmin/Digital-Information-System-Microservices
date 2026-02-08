@@ -2,10 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
+
+// Import PDF components dynamically to avoid SSR issues
+const Document = dynamic(
+  () => import('react-pdf').then((mod) => mod.Document),
+  { ssr: false }
+);
+
+const Page = dynamic(
+  () => import('react-pdf').then((mod) => mod.Page),
+  { ssr: false }
+);
 
 export default function BookReadPage() {
   const params = useParams();
@@ -14,6 +26,9 @@ export default function BookReadPage() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'text' | 'pdf'>('text');
+  
+  // Text reading state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [fontSize, setFontSize] = useState(18);
@@ -22,6 +37,13 @@ export default function BookReadPage() {
   const [currentHighlight, setCurrentHighlight] = useState<{ start: number; end: number; text: string } | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [selectedHighlightIds, setSelectedHighlightIds] = useState<number[]>([]);
+  
+  // PDF reading state
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [scale, setScale] = useState<number>(1.2);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
 
@@ -69,10 +91,15 @@ export default function BookReadPage() {
       const data = await bookService.getById(bookId);
       setBook(data);
       
-      // Calculate total pages
-      const content = data.content || '';
-      const pages = Math.max(1, Math.ceil(content.length / CHARS_PER_PAGE));
-      setTotalPages(pages);
+      // Determine view mode: prefer PDF if available, otherwise use text
+      if (data.pdf_file_url) {
+        setViewMode('pdf');
+      } else if (data.content && data.content.trim().length > 0) {
+        setViewMode('text');
+        // Calculate total pages for text mode
+        const pages = Math.max(1, Math.ceil(data.content.length / CHARS_PER_PAGE));
+        setTotalPages(pages);
+      }
     } catch (error) {
       console.error('Failed to fetch book:', error);
     } finally {
@@ -274,6 +301,64 @@ export default function BookReadPage() {
     return applyHighlights(pageContent, start, end);
   };
 
+  // PDF handlers
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setPdfError(null);
+  };
+
+  const onDocumentLoadError = (error: Error) => {
+    console.error('Error loading PDF:', error);
+    setPdfError('Не удалось загрузить PDF файл');
+  };
+
+  const handlePdfPageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > numPages) return;
+    setPageNumber(newPage);
+    if (authToken) {
+      savePdfProgress(newPage, numPages);
+    }
+  };
+
+  const savePdfProgress = async (page: number, total: number) => {
+    if (!authToken) return;
+
+    try {
+      const progressPercentage = (page / total) * 100;
+      
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({
+          book_id: bookId,
+          current_page: page,
+          total_pages: total,
+          progress_percentage: progressPercentage,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to save PDF progress:', error);
+    }
+  };
+
+  const handleZoomIn = () => {
+    setScale((prev) => Math.min(prev + 0.2, 3));
+  };
+
+  const handleZoomOut = () => {
+    setScale((prev) => Math.max(prev - 0.2, 0.5));
+  };
+
+  const getPdfUrl = () => {
+    if (!book?.pdf_file_url) return '';
+    
+    // Use the proxy endpoint from content-service
+    return `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/read`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -282,7 +367,7 @@ export default function BookReadPage() {
     );
   }
 
-  if (!book || !book.content) {
+  if (!book || (!book.content && !book.pdf_file_url)) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
@@ -332,19 +417,45 @@ export default function BookReadPage() {
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mt-20" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">Sazlamalar</h3>
             
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Harp ölçegi: {fontSize}px
-              </label>
-              <input
-                type="range"
-                min="14"
-                max="24"
-                value={fontSize}
-                onChange={(e) => setFontSize(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
+            {viewMode === 'text' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Harp ölçegi: {fontSize}px
+                </label>
+                <input
+                  type="range"
+                  min="14"
+                  max="24"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            )}
+
+            {viewMode === 'pdf' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Масштаб: {Math.round(scale * 100)}%
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleZoomOut}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    <ZoomOut className="inline mr-2" size={16} />
+                    Кичелт
+                  </button>
+                  <button
+                    onClick={handleZoomIn}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    <ZoomIn className="inline mr-2" size={16} />
+                    Uly
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={() => setShowSettings(false)}
@@ -356,68 +467,163 @@ export default function BookReadPage() {
         </div>
       )}
 
-      {/* Book Page */}
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-          {/* Book Content */}
-          <div
-            id="book-page-content"
-            className="px-8 sm:px-12 md:px-16 py-12 min-h-[600px] prose prose-gray max-w-none"
-            style={{
-              fontSize: `${fontSize}px`,
-              lineHeight: '1.8',
-              fontFamily: 'Georgia, serif',
-              columnCount: 1,
-            }}
-            onMouseUp={handleTextSelection}
-            dangerouslySetInnerHTML={{ __html: getPageContent() }}
-          />
-
-          {/* Page Footer with Navigation */}
-          <div className="border-t bg-gray-50 px-8 py-4">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft size={18} />
-                <span className="hidden sm:inline">Öňki</span>
-              </button>
-
-              <div className="flex items-center gap-3">
-                {authToken && progress && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Bookmark size={16} className="text-primary" />
-                    <span className="hidden sm:inline">Ýatda saklandy</span>
-                  </div>
-                )}
-                <span className="text-sm font-medium text-gray-900">
-                  {currentPage} / {totalPages}
-                </span>
-              </div>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <span className="hidden sm:inline">Indiki</span>
-                <ChevronRight size={18} />
-              </button>
+      {/* Book Content Area */}
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {viewMode === 'pdf' ? (
+          /* PDF Viewer */
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            <div className="flex justify-center items-center p-4 bg-gray-50">
+              {pdfError ? (
+                <div className="text-red-600 text-center py-8">
+                  <p className="mb-4">{pdfError}</p>
+                  <button
+                    onClick={() => {
+                      setPdfError(null);
+                      fetchBook();
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Gaýtadan synanyş
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <Document
+                    file={getPdfUrl()}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    onLoadError={onDocumentLoadError}
+                    loading={
+                      <div className="flex items-center justify-center py-12">
+                        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+                      </div>
+                    }
+                  >
+                    <Page
+                      pageNumber={pageNumber}
+                      scale={scale}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={true}
+                      loading={
+                        <div className="flex items-center justify-center py-12">
+                          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-400 border-t-gray-700"></div>
+                        </div>
+                      }
+                    />
+                  </Document>
+                </div>
+              )}
             </div>
 
-            {/* Progress Bar */}
-            <div className="mt-4">
-              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-300"
-                  style={{ width: `${(currentPage / totalPages) * 100}%` }}
-                />
+            {/* PDF Navigation Footer */}
+            {!pdfError && numPages > 0 && (
+              <div className="border-t bg-gray-50 px-8 py-4">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => handlePdfPageChange(pageNumber - 1)}
+                    disabled={pageNumber === 1}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft size={18} />
+                    <span className="hidden sm:inline">Öňki</span>
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {authToken && progress && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Bookmark size={16} className="text-primary" />
+                        <span className="hidden sm:inline">Ýatda saklandy</span>
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-900">
+                      {pageNumber} / {numPages}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handlePdfPageChange(pageNumber + 1)}
+                    disabled={pageNumber === numPages}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <span className="hidden sm:inline">Indiki</span>
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mt-4">
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${(pageNumber / numPages) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Text Viewer */
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            {/* Book Content */}
+            <div
+              id="book-page-content"
+              className="px-8 sm:px-12 md:px-16 py-12 min-h-[600px] prose prose-gray max-w-none"
+              style={{
+                fontSize: `${fontSize}px`,
+                lineHeight: '1.8',
+                fontFamily: 'Georgia, serif',
+                columnCount: 1,
+              }}
+              onMouseUp={handleTextSelection}
+              dangerouslySetInnerHTML={{ __html: getPageContent() }}
+            />
+
+            {/* Text Navigation Footer */}
+            <div className="border-t bg-gray-50 px-8 py-4">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft size={18} />
+                  <span className="hidden sm:inline">Öňki</span>
+                </button>
+
+                <div className="flex items-center gap-3">
+                  {authToken && progress && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Bookmark size={16} className="text-primary" />
+                      <span className="hidden sm:inline">Ýatda saklandy</span>
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-gray-900">
+                    {currentPage} / {totalPages}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="hidden sm:inline">Indiki</span>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-4">
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${(currentPage / totalPages) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Color Picker for Highlights */}

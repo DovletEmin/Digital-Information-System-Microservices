@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
 from models import Book, BookCategory, BookReadingProgress
 from schemas import BookCreate, BookUpdate, BookResponse, BookReadingProgressCreate, BookReadingProgressUpdate, BookReadingProgressResponse
 import math
+import httpx
+import io
 
 router = APIRouter()
 
@@ -295,3 +298,30 @@ async def save_reading_progress(
             "created_at": new_progress.created_at,
             "updated_at": new_progress.updated_at
         }
+
+@router.get("/books/{book_id}/read")
+async def read_book(book_id: int, db: Session = Depends(get_db)):
+    """Proxy endpoint для чтения PDF файла книги"""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    if not book.pdf_file_url:
+        raise HTTPException(status_code=404, detail="PDF file not found for this book")
+    
+    try:
+        # Если это внешняя ссылка, проксируем запрос
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(book.pdf_file_url)
+            response.raise_for_status()
+            
+            return StreamingResponse(
+                io.BytesIO(response.content),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="{book.title}.pdf"',
+                    "Accept-Ranges": "bytes",
+                }
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {str(e)}")
