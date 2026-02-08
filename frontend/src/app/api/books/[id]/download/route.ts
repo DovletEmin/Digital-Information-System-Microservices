@@ -24,14 +24,17 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     });
   }
 
+  const data = await upstream.arrayBuffer();
+
   const headers = new Headers();
   const contentType = upstream.headers.get('content-type');
   const contentDisposition = upstream.headers.get('content-disposition');
 
   if (contentType) headers.set('content-type', contentType);
   if (contentDisposition) headers.set('content-disposition', contentDisposition);
+  headers.set('content-length', String(data.byteLength));
 
-  return new Response(upstream.body, {
+  return new Response(data, {
     status: upstream.status,
     headers,
   });
