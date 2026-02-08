@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
 
   if (pathname.endsWith('/pdf.worker.js') || pathname.endsWith('/pdf.worker.min.js')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/api/pdf-worker';
+    url.pathname = '/pdf.worker.js';
     return NextResponse.rewrite(url);
   }
 
