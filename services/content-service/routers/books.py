@@ -8,8 +8,17 @@ from schemas import BookCreate, BookUpdate, BookResponse, BookReadingProgressCre
 import math
 import httpx
 import io
+import re
+from urllib.parse import quote
 
 router = APIRouter()
+
+def _content_disposition(filename: str, disposition: str) -> str:
+    # Ensure ASCII-safe fallback for header values, while preserving UTF-8 via filename*
+    safe_base = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("_") or "book"
+    safe_name = f"{safe_base}.pdf"
+    utf8_name = quote(f"{filename}.pdf", safe="")
+    return f"{disposition}; filename=\"{safe_name}\"; filename*=UTF-8''{utf8_name}"
 
 @router.get("/books", response_model=dict)
 async def list_books(
@@ -319,7 +328,7 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
                 io.BytesIO(response.content),
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": f'inline; filename="{book.title}.pdf"',
+                    "Content-Disposition": _content_disposition(book.title, "inline"),
                     "Accept-Ranges": "bytes",
                 }
             )
@@ -345,7 +354,7 @@ async def download_book(book_id: int, db: Session = Depends(get_db)):
                 io.BytesIO(response.content),
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": f'attachment; filename="{book.title}.pdf"',
+                    "Content-Disposition": _content_disposition(book.title, "attachment"),
                     "Content-Type": "application/pdf",
                 }
             )
