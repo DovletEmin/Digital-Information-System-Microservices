@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { pdfjs } from 'react-pdf';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
@@ -18,6 +19,13 @@ const Page = dynamic(
   () => import('react-pdf').then((mod) => mod.Page),
   { ssr: false }
 );
+
+if (typeof window !== 'undefined') {
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+}
 
 export default function BookReadPage() {
   const params = useParams();
@@ -414,11 +422,18 @@ export default function BookReadPage() {
     setScale((prev) => Math.max(prev - 0.2, 0.5));
   };
 
-  const getPdfUrl = () => {
+  const getPdfFile = () => {
     if (!book?.pdf_file_url) return '';
-    
-    // Use the proxy endpoint from content-service
-    return `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/read`;
+
+    const url = `/api/books/${bookId}/read`;
+    if (!authToken) return url;
+
+    return {
+      url,
+      httpHeaders: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    };
   };
 
   if (loading) {
@@ -551,7 +566,7 @@ export default function BookReadPage() {
               ) : (
                 <div className="flex flex-col items-center">
                   <Document
-                    file={getPdfUrl()}
+                    file={getPdfFile()}
                     onLoadSuccess={onDocumentLoadSuccess}
                     onLoadError={onDocumentLoadError}
                     loading={

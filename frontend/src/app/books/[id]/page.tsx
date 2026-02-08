@@ -140,11 +140,10 @@ export default function BookDetailsPage() {
     }
 
     try {
-      // For PDF, use the proxy endpoint if available
+      // For PDF, use same-origin proxy to avoid CORS
       let downloadUrl = fileUrl;
       if (fileType === 'pdf') {
-        // Try using the read endpoint as it might have better CORS support
-        downloadUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/download`;
+        downloadUrl = `/api/books/${bookId}/download`;
       }
 
       // Try fetching as blob first
