@@ -214,6 +214,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq_user:rabbitmq_pass@rabbitmq:5672/
       - AUTH_SERVICE_URL=http://auth-service:8001
+      - MEDIA_SERVICE_URL=http://media-service:8005
+      - MINIO_PUBLIC_URL=http://192.168.55.154:9000
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://192.168.55.154:3000,http://192.168.55.154:3001,http://192.168.55.154:3002
       - ALLOWED_HOSTS=localhost,127.0.0.1,192.168.55.154,api-gateway,content-service
     depends_on:
