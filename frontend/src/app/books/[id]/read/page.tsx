@@ -10,6 +10,11 @@ import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
 import { pdfjs } from 'react-pdf';
 
+if (typeof window !== 'undefined') {
+  const origin = window.location.origin;
+  pdfjs.GlobalWorkerOptions.workerSrc = `${origin}/api/pdf-worker`;
+}
+
 
 // Import PDF components dynamically to avoid SSR issues
 const Document = dynamic(
@@ -94,11 +99,7 @@ export default function BookReadPage() {
     }
   }, [authToken, bookId]);
 
-//   useEffect(() => {
-//   if (typeof window !== 'undefined') {
-//     pdfjs.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
-//   }
-// }, []);
+
 
 
   // Load EPUB book when view mode is EPUB
