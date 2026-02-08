@@ -94,11 +94,11 @@ export default function BookReadPage() {
     }
   }, [authToken, bookId]);
 
-  useEffect(() => {
-  if (typeof window !== 'undefined') {
-    pdfjs.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
-  }
-}, []);
+//   useEffect(() => {
+//   if (typeof window !== 'undefined') {
+//     pdfjs.GlobalWorkerOptions.workerSrc = '/api/pdf-worker';
+//   }
+// }, []);
 
 
   // Load EPUB book when view mode is EPUB
