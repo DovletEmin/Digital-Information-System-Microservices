@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -26,7 +26,7 @@ export default function BookReadPage() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'text' | 'pdf'>('text');
+  const [viewMode, setViewMode] = useState<'text' | 'pdf' | 'epub'>('text');
   
   // Text reading state
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,6 +43,12 @@ export default function BookReadPage() {
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.2);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  
+  // EPUB reading state
+  const [epubBook, setEpubBook] = useState<any>(null);
+  const [epubRendition, setEpubRendition] = useState<any>(null);
+  const [epubError, setEpubError] = useState<string | null>(null);
+  const epubViewerRef = useRef<HTMLDivElement>(null);
   
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
@@ -85,15 +91,30 @@ export default function BookReadPage() {
     }
   }, [authToken, bookId]);
 
+  // Load EPUB book when view mode is EPUB
+  useEffect(() => {
+    if (viewMode === 'epub' && book?.epub_file_url && epubViewerRef.current) {
+      loadEpubBook();
+    }
+    
+    return () => {
+      if (epubRendition) {
+        epubRendition.destroy();
+      }
+    };
+  }, [viewMode, book]);
+
   const fetchBook = async () => {
     try {
       setLoading(true);
       const data = await bookService.getById(bookId);
       setBook(data);
       
-      // Determine view mode: prefer PDF if available, otherwise use text
+      // Determine view mode: prefer PDF, then EPUB, then text
       if (data.pdf_file_url) {
         setViewMode('pdf');
+      } else if (data.epub_file_url) {
+        setViewMode('epub');
       } else if (data.content && data.content.trim().length > 0) {
         setViewMode('text');
         // Calculate total pages for text mode
@@ -159,10 +180,51 @@ export default function BookReadPage() {
     }
   };
 
+  const loadEpubBook = async () => {
+    if (typeof window === 'undefined' || !book?.epub_file_url) return;
+
+    try {
+      setEpubError(null);
+      // Dynamically import EPUB.js
+      const ePub = (await import('epubjs')).default;
+      const bookInstance = ePub(book.epub_file_url);
+      setEpubBook(bookInstance);
+
+      if (epubViewerRef.current) {
+        // Clear previous rendition if any
+        epubViewerRef.current.innerHTML = '';
+        
+        const rendition = bookInstance.renderTo(epubViewerRef.current, {
+          width: '100%',
+          height: '100%',
+          spread: 'none'
+        });
+
+        await rendition.display();
+        setEpubRendition(rendition);
+
+        // Get total pages (locations)
+        bookInstance.ready.then(() => {
+          return bookInstance.locations.generate(1600);
+        }).then((locations: any) => {
+          setTotalPages(locations.length);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load EPUB:', error);
+      setEpubError('EPUB faýly ýüklenip bilinmedi');
+    }
+  };
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
     setCurrentPage(newPage);
     saveProgress(newPage);
+    
+    // Handle EPUB navigation
+    if (viewMode === 'epub' && epubRendition && epubBook) {
+      epubRendition.display(epubBook.locations.cfiFromLocation(newPage - 1));
+    }
   };
 
   const getTextOffset = (root: Node, target: Node, offset: number): number => {
@@ -367,7 +429,7 @@ export default function BookReadPage() {
     );
   }
 
-  if (!book || (!book.content && !book.pdf_file_url)) {
+  if (!book || (!book.content && !book.pdf_file_url && !book.epub_file_url)) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
@@ -557,6 +619,77 @@ export default function BookReadPage() {
                       style={{ width: `${(pageNumber / numPages) * 100}%` }}
                     />
                   </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : viewMode === 'epub' ? (
+          /* EPUB Viewer */
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            <div className="flex justify-center items-center p-4 bg-gray-50">
+              {epubError ? (
+                <div className="text-red-600 text-center py-8">
+                  <p className="mb-4">{epubError}</p>
+                  <button
+                    onClick={() => {
+                      setEpubError(null);
+                      loadEpubBook();
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Gaýtadan synanyş
+                  </button>
+                </div>
+              ) : (
+                <div 
+                  ref={epubViewerRef}
+                  className="epub-viewer w-full"
+                  style={{ height: '600px', minHeight: '600px' }}
+                />
+              )}
+            </div>
+
+            {/* EPUB Navigation Footer */}
+            {!epubError && epubRendition && (
+              <div className="border-t bg-gray-50 px-8 py-4">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => {
+                      if (epubRendition) {
+                        epubRendition.prev();
+                        setCurrentPage((prev) => Math.max(1, prev - 1));
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <ChevronLeft size={18} />
+                    <span className="hidden sm:inline">Öňki</span>
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {authToken && progress && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Bookmark size={16} className="text-primary" />
+                        <span className="hidden sm:inline">Ýatda saklandy</span>
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-900">
+                      EPUB
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (epubRendition) {
+                        epubRendition.next();
+                        setCurrentPage((prev) => prev + 1);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="hidden sm:inline">Indiki</span>
+                    <ChevronRight size={18} />
+                  </button>
                 </div>
               </div>
             )}

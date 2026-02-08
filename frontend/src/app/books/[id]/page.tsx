@@ -140,28 +140,55 @@ export default function BookDetailsPage() {
     }
 
     try {
-      // Fetch the file as blob
-      const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error('Download failed');
-      
-      const blob = await response.blob();
-      
-      // Create download link with proper filename
-      const url = window.URL.createObjectURL(blob);
+      // For PDF, use the proxy endpoint if available
+      let downloadUrl = fileUrl;
+      if (fileType === 'pdf') {
+        // Try using the read endpoint as it might have better CORS support
+        downloadUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/download`;
+      }
+
+      // Try fetching as blob first
+      try {
+        const response = await fetch(downloadUrl, {
+          method: 'GET',
+          headers: authToken ? {
+            'Authorization': `Bearer ${authToken}`
+          } : {}
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${book.title}.${fileType}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          return;
+        }
+      } catch (fetchError) {
+        console.log('Blob fetch failed, trying direct download:', fetchError);
+      }
+
+      // Fallback: direct download link
       const link = document.createElement('a');
-      link.href = url;
+      link.href = fileUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
       link.download = `${book.title}.${fileType}`;
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
     } catch (error) {
-      console.error('Failed to download:', error);
-      // Fallback: try opening in new tab
+      console.error('Failed to initiate download:', error);
+      // Last fallback: open in new tab
       try {
-        window.open(fileUrl, '_blank');
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
       } catch (e) {
         alert('Ýükläp almak başartmady');
       }

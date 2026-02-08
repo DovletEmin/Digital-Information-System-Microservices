@@ -325,3 +325,29 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
             )
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {str(e)}")
+
+@router.get("/books/{book_id}/download")
+async def download_book(book_id: int, db: Session = Depends(get_db)):
+    """Download endpoint for PDF files"""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    
+    if not book.pdf_file_url:
+        raise HTTPException(status_code=404, detail="PDF file not found for this book")
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(book.pdf_file_url)
+            response.raise_for_status()
+            
+            return StreamingResponse(
+                io.BytesIO(response.content),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{book.title}.pdf"',
+                    "Content-Type": "application/pdf",
+                }
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to download PDF: {str(e)}")
