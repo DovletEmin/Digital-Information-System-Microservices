@@ -24,31 +24,8 @@ def _content_disposition(filename: str, disposition: str) -> str:
     utf8_name = quote(f"{filename}.pdf", safe="")
     return f"{disposition}; filename=\"{safe_name}\"; filename*=UTF-8''{utf8_name}"
 
-def _resolve_pdf_url(url: str, use_download: bool) -> str:
-    if not url:
-        return url
-    if not MEDIA_SERVICE_URL:
-        return url
-
-    parsed = urlparse(url)
-    basename = os.path.basename(parsed.path)
-    if not basename:
-        return url
-
-    # If URL points to MinIO public endpoint, route through media-service.
-    if MINIO_PUBLIC_URL and url.startswith(MINIO_PUBLIC_URL):
-        endpoint = "download" if use_download else "file"
-        return f"{MEDIA_SERVICE_URL}/api/v1/{endpoint}/{basename}"
-
-    # Heuristic fallback for MinIO-style URLs when MINIO_PUBLIC_URL isn't set.
-    if (parsed.netloc.endswith(":9000") or "minio" in parsed.netloc) and "smu-media" in parsed.path:
-        endpoint = "download" if use_download else "file"
-        return f"{MEDIA_SERVICE_URL}/api/v1/{endpoint}/{basename}"
-
-    # If it's already a media-service URL, keep it.
-    if parsed.netloc and MEDIA_SERVICE_URL.replace("http://", "").replace("https://", "") in parsed.netloc:
-        return url
-
+# Prefer the original URL first; use media-service only as fallback.
+def _primary_pdf_url(url: str) -> str:
     return url
 
 async def _fetch_pdf(url: str) -> httpx.Response:
@@ -365,7 +342,7 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
     
     try:
         # Если это внешняя ссылка, проксируем запрос
-        primary_url = _resolve_pdf_url(book.pdf_file_url, use_download=False)
+        primary_url = _primary_pdf_url(book.pdf_file_url)
         response = await _fetch_pdf(primary_url)
         if response.status_code >= 400 or not response.content:
             fallback_url = _media_fallback_url(book.pdf_file_url, use_download=False)
@@ -399,7 +376,7 @@ async def download_book(book_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="PDF file not found for this book")
     
     try:
-        primary_url = _resolve_pdf_url(book.pdf_file_url, use_download=True)
+        primary_url = _primary_pdf_url(book.pdf_file_url)
         response = await _fetch_pdf(primary_url)
         if response.status_code >= 400 or not response.content:
             fallback_url = _media_fallback_url(book.pdf_file_url, use_download=True)
