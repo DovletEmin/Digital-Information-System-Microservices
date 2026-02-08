@@ -353,15 +353,16 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {response.status_code}")
         if not response.content:
             raise HTTPException(status_code=502, detail="Failed to fetch PDF: empty response")
-            
-            return StreamingResponse(
-                io.BytesIO(response.content),
-                media_type=response.headers.get("content-type") or "application/pdf",
-                headers={
-                    "Content-Disposition": _content_disposition(book.title, "inline"),
-                    "Accept-Ranges": "bytes",
-                }
-            )
+
+        return StreamingResponse(
+            io.BytesIO(response.content),
+            media_type=response.headers.get("content-type") or "application/pdf",
+            headers={
+                "Content-Disposition": _content_disposition(book.title, "inline"),
+                "Accept-Ranges": "bytes",
+            }
+        )
+
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {str(e)}")
 
