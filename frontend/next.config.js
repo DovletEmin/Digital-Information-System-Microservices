@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   images: {
-    domains: ['localhost', '172.20.102.83'],
+    domains: ['localhost', '172.20.102.83', '192.168.55.154'],
     unoptimized: true
   },
   webpack: (config, { isServer }) => {

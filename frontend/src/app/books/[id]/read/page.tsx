@@ -44,7 +44,15 @@ const PDF_HIGHLIGHT_COLORS: Record<PdfHighlight['color'], string> = {
 export default function BookReadPage() {
   const params = useParams();
   const router = useRouter();
-  const bookId = Number(params.id);
+  const paramId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const parsedId = Number(paramId);
+  const bookId = Number.isFinite(parsedId) ? parsedId : null;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Book Read Page - params:', params);
+    console.log('Book Read Page - bookId:', bookId);
+  }, [params, bookId]);
 
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
@@ -228,11 +236,12 @@ export default function BookReadPage() {
   }, []);
 
   useEffect(() => {
+    if (bookId === null) return;
     fetchBook();
   }, [bookId]);
 
   useEffect(() => {
-    if (authToken) {
+    if (authToken && bookId !== null) {
       loadProgress();
       loadHighlights();
     }
@@ -251,6 +260,7 @@ export default function BookReadPage() {
   }, [viewMode, book]);
 
   const fetchBook = async () => {
+    if (bookId === null) return;
     try {
       setLoading(true);
       const data = await bookService.getById(bookId);
@@ -273,6 +283,7 @@ export default function BookReadPage() {
   };
 
   const loadProgress = async () => {
+    if (bookId === null) return;
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         headers: {
@@ -293,7 +304,7 @@ export default function BookReadPage() {
   };
 
   const saveProgress = async (page: number) => {
-    if (!authToken) return;
+    if (!authToken || bookId === null) return;
 
     try {
       const progressPercentage = (page / totalPages) * 100;
@@ -317,6 +328,7 @@ export default function BookReadPage() {
   };
 
   const loadHighlights = async () => {
+    if (bookId === null) return;
     try {
       const data = await savedService.getBookHighlights(bookId);
       setHighlights(data);
@@ -414,6 +426,7 @@ export default function BookReadPage() {
 
   const handleHighlight = async (color: string) => {
     if (!currentHighlight) return;
+    if (bookId === null) return;
 
     try {
       if (selectedHighlightIds.length > 0) {
@@ -515,7 +528,7 @@ export default function BookReadPage() {
   };
 
   const savePdfProgress = async (page: number, total: number) => {
-    if (!authToken) return;
+    if (!authToken || bookId === null) return;
 
     try {
       const progressPercentage = (page / total) * 100;
@@ -544,7 +557,20 @@ export default function BookReadPage() {
   };
 
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  const pdfFileUrl = book?.pdf_file_url ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  const pdfFileUrl = book?.pdf_file_url && bookId !== null ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  
+  // Debug logging for PDF URL
+  useEffect(() => {
+    if (book && viewMode === 'pdf') {
+      console.log('PDF Config:', {
+        apiBaseUrl,
+        bookId,
+        pdf_file_url: book.pdf_file_url,
+        pdfFileUrl,
+        authToken: authToken ? 'present' : 'missing'
+      });
+    }
+  }, [book, viewMode, apiBaseUrl, bookId, pdfFileUrl, authToken]);
   const pdfHttpHeaders = authToken
     ? {
         Authorization: `Bearer ${authToken}`,
@@ -555,6 +581,19 @@ export default function BookReadPage() {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+      </div>
+    );
+  }
+
+  if (bookId === null) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <h1 className="text-2xl font-bold mb-4">Invalid book id</h1>
+          <button onClick={() => router.push('/books')} className="text-blue-400 hover:underline">
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
@@ -671,39 +710,51 @@ export default function BookReadPage() {
         {viewMode === 'pdf' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <div className="pdf-viewer">
-              <Worker workerUrl={PDF_WORKER_URL}>
-                <Viewer
-                  key={pdfReloadKey}
-                  fileUrl={pdfFileUrl}
-                  httpHeaders={pdfHttpHeaders}
-                  plugins={[
-                    highlightPluginInstance,
-                    pageNavigationPluginInstance,
-                    scrollModePluginInstance,
-                    zoomPluginInstance,
-                  ]}
-                  defaultScale={SpecialZoomLevel.PageWidth}
-                  renderPage={renderPage}
-                  renderLoader={() => (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
-                    </div>
-                  )}
-                  renderError={() => (
-                    <div className="text-red-600 text-center py-12">
-                      <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
-                      <button
-                        onClick={() => setPdfReloadKey((prev) => prev + 1)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        GaÃ½tadan synanyÅŸ
-                      </button>
-                    </div>
-                  )}
-                  onDocumentLoad={handlePdfLoad}
-                  onPageChange={handlePdfPageChange}
-                />
-              </Worker>
+              {pdfFileUrl ? (
+                <Worker workerUrl={PDF_WORKER_URL}>
+                  <Viewer
+                    key={pdfReloadKey}
+                    fileUrl={pdfFileUrl}
+                    httpHeaders={pdfHttpHeaders}
+                    plugins={[
+                      highlightPluginInstance,
+                      pageNavigationPluginInstance,
+                      scrollModePluginInstance,
+                      zoomPluginInstance,
+                    ]}
+                    defaultScale={SpecialZoomLevel.PageWidth}
+                    renderPage={renderPage}
+                    renderLoader={() => (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+                      </div>
+                    )}
+                    renderError={() => (
+                      <div className="text-red-600 text-center py-12">
+                        <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
+                        <button
+                          onClick={() => setPdfReloadKey((prev) => prev + 1)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          GaÃ½tadan synanyÅŸ
+                        </button>
+                      </div>
+                    )}
+                    onDocumentLoad={handlePdfLoad}
+                    onPageChange={handlePdfPageChange}
+                  />
+                </Worker>
+              ) : (
+                <div className="text-red-600 text-center py-12">
+                  <p className="mb-2">PDF url is missing</p>
+                  <button
+                    onClick={() => router.push(`/books/${bookId}`)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Go back
+                  </button>
+                </div>
+              )}
             </div>
 
             {numPages > 0 && (

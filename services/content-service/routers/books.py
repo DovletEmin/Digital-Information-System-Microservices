@@ -388,14 +388,14 @@ async def download_book(book_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=502, detail=f"Failed to download PDF: {response.status_code}")
         if not response.content:
             raise HTTPException(status_code=502, detail="Failed to download PDF: empty response")
-            
-            return StreamingResponse(
-                io.BytesIO(response.content),
-                media_type=response.headers.get("content-type") or "application/pdf",
-                headers={
-                    "Content-Disposition": _content_disposition(book.title, "attachment"),
-                    "Content-Type": "application/pdf",
-                }
-            )
+
+        return StreamingResponse(
+            io.BytesIO(response.content),
+            media_type=response.headers.get("content-type") or "application/pdf",
+            headers={
+                "Content-Disposition": _content_disposition(book.title, "attachment"),
+                "Content-Type": "application/pdf",
+            }
+        )
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Failed to download PDF: {str(e)}")

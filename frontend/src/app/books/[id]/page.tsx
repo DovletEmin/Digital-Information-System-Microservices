@@ -131,7 +131,7 @@ export default function BookDetailsPage() {
   };
 
   const handleDownload = async (fileType: 'pdf' | 'epub') => {
-    if (!book) return;
+    if (!book || !bookId) return;
     
     const fileUrl = fileType === 'pdf' ? book.pdf_file_url : book.epub_file_url;
     if (!fileUrl) {
@@ -140,11 +140,17 @@ export default function BookDetailsPage() {
     }
 
     try {
-      // For PDF, use same-origin proxy to avoid CORS
+      // For PDF, use backend proxy to avoid CORS
       let downloadUrl = fileUrl;
       if (fileType === 'pdf') {
         const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+        if (!apiBaseUrl) {
+          console.error('NEXT_PUBLIC_API_URL is not configured');
+          alert('Configuration error: API URL is missing');
+          return;
+        }
         downloadUrl = `${apiBaseUrl}/api/v1/books/${bookId}/download`;
+        console.log('Download URL:', downloadUrl);
       }
 
       // Try fetching as blob first
