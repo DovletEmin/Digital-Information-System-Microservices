@@ -80,7 +80,7 @@ export default function BookReadPage() {
   const pageNavigationPluginInstance = useMemo(() => pageNavigationPlugin(), []);
   const zoomPluginInstance = useMemo(() => zoomPlugin(), []);
   const scrollModePluginInstance = useMemo(() => scrollModePlugin(), []);
-  const { CurrentScale } = zoomPluginInstance;
+  const { CurrentScale, ZoomIn: ZoomInButton, ZoomOut: ZoomOutButton } = zoomPluginInstance;
 
   const addPdfHighlight = useCallback(
     (props: RenderHighlightTargetProps, color: PdfHighlight['color']) => {
@@ -543,14 +543,6 @@ export default function BookReadPage() {
     pageNavigationPluginInstance.jumpToPage(newPage - 1);
   };
 
-  const handleZoomIn = () => {
-    zoomPluginInstance.zoomIn();
-  };
-
-  const handleZoomOut = () => {
-    zoomPluginInstance.zoomOut();
-  };
-
   const pdfFileUrl = book?.pdf_file_url ? `/api/books/${bookId}/read` : '';
   const pdfHttpHeaders = authToken
     ? {
@@ -635,20 +627,28 @@ export default function BookReadPage() {
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">ÐœÐ°ÑÑˆÑ‚Ð°Ð±:</label>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleZoomOut}
-                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  >
-                    <ZoomOut className="inline mr-2" size={16} />
-                    ÐšÐ¸Ñ‡ÐµÐ»Ñ‚
-                  </button>
-                  <button
-                    onClick={handleZoomIn}
-                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  >
-                    <ZoomIn className="inline mr-2" size={16} />
-                    Uly
-                  </button>
+                  <ZoomOutButton>
+                    {({ onClick }) => (
+                      <button
+                        onClick={onClick}
+                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                      >
+                        <ZoomOut className="inline mr-2" size={16} />
+                        ÐšÐ¸Ñ‡ÐµÐ»Ñ‚
+                      </button>
+                    )}
+                  </ZoomOutButton>
+                  <ZoomInButton>
+                    {({ onClick }) => (
+                      <button
+                        onClick={onClick}
+                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                      >
+                        <ZoomIn className="inline mr-2" size={16} />
+                        Uly
+                      </button>
+                    )}
+                  </ZoomInButton>
                 </div>
                 <div className="mt-3 text-xs text-gray-500">
                   <CurrentScale>{({ scale }) => <span>Häzirki: {Math.round(scale * 100)}%</span>}</CurrentScale>
