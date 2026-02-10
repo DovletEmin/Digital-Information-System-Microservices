@@ -264,16 +264,22 @@ export default function BookReadPage() {
     try {
       setLoading(true);
       const data = await bookService.getById(bookId);
+      console.log('Fetched book data:', data);
       setBook(data);
 
       if (data.pdf_file_url) {
+        console.log('Setting viewMode to pdf, url:', data.pdf_file_url);
         setViewMode('pdf');
       } else if (data.epub_file_url) {
+        console.log('Setting viewMode to epub, url:', data.epub_file_url);
         setViewMode('epub');
-      } else if (data.content && data.content.trim().length > 0) {
+      } else if (data.content && typeof data.content === 'string' && data.content.trim().length > 0) {
+        console.log('Setting viewMode to text, content length:', data.content.length);
         setViewMode('text');
         const pages = Math.max(1, Math.ceil(data.content.length / CHARS_PER_PAGE));
         setTotalPages(pages);
+      } else {
+        console.warn('No valid content found for book');
       }
     } catch (error) {
       console.error('Failed to fetch book:', error);
@@ -557,18 +563,28 @@ export default function BookReadPage() {
   };
 
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  const pdfFileUrl = book?.pdf_file_url && bookId !== null ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  const pdfFileUrl = book?.pdf_file_url && bookId !== null && apiBaseUrl 
+    ? `${apiBaseUrl}/api/v1/books/${bookId}/read` 
+    : '';
   
   // Debug logging for PDF URL
   useEffect(() => {
     if (book && viewMode === 'pdf') {
       console.log('PDF Config:', {
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
         apiBaseUrl,
         bookId,
         pdf_file_url: book.pdf_file_url,
         pdfFileUrl,
         authToken: authToken ? 'present' : 'missing'
       });
+      
+      if (!apiBaseUrl) {
+        console.error('CRITICAL: NEXT_PUBLIC_API_URL is not set!');
+      }
+      if (!pdfFileUrl) {
+        console.error('CRITICAL: pdfFileUrl is empty!');
+      }
     }
   }, [book, viewMode, apiBaseUrl, bookId, pdfFileUrl, authToken]);
   const pdfHttpHeaders = authToken
@@ -729,21 +745,32 @@ export default function BookReadPage() {
                         <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
                       </div>
                     )}
-                    renderError={() => (
-                      <div className="text-red-600 text-center py-12">
-                        <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
-                        <button
-                          onClick={() => setPdfReloadKey((prev) => prev + 1)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          GaÃ½tadan synanyÅŸ
-                        </button>
-                      </div>
-                    )}
+                    renderError={(error) => {
+                      console.error('PDF Viewer Error:', error);
+                      console.error('PDF URL that failed:', pdfFileUrl);
+                      return (
+                        <div className="text-red-600 text-center py-12">
+                          <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
+                          <p className="text-sm mb-4 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
+                          <button
+                            onClick={() => setPdfReloadKey((prev) => prev + 1)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            GaÃ½tadan synanyÅŸ
+                          </button>
+                        </div>
+                      );
+                    }}
                     onDocumentLoad={handlePdfLoad}
                     onPageChange={handlePdfPageChange}
                   />
                 </Worker>
+              ) : !apiBaseUrl ? (
+                <div className="text-red-600 text-center py-12">
+                  <p className="mb-2 font-bold">Configuration Error</p>
+                  <p className="text-sm mb-4 text-gray-600">NEXT_PUBLIC_API_URL is not configured</p>
+                  <p className="text-xs text-gray-500">Please check your environment variables</p>
+                </div>
               ) : (
                 <div className="text-red-600 text-center py-12">
                   <p className="mb-2">PDF url is missing</p>
