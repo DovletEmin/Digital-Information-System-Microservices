@@ -91,7 +91,8 @@ export default function BookReadPage() {
       }
 
       const { selectionData } = props;
-      if (!selectionData || selectionData.highlightAreas.length === 0) {
+      const highlightAreas = (selectionData as { highlightAreas?: HighlightArea[] } | null)?.highlightAreas ?? [];
+      if (!selectionData || highlightAreas.length === 0) {
         props.cancel();
         window.getSelection()?.removeAllRanges();
         return;
@@ -103,7 +104,7 @@ export default function BookReadPage() {
           id: Date.now(),
           color,
           quote: selectionData.text,
-          areas: selectionData.highlightAreas,
+          areas: highlightAreas,
         },
       ]);
 
