@@ -562,6 +562,7 @@ export default function BookReadPage() {
     pageNavigationPluginInstance.jumpToPage(newPage - 1);
   };
 
+  // Calculate PDF URL
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
   const pdfFileUrl = book?.pdf_file_url && bookId !== null && apiBaseUrl 
     ? `${apiBaseUrl}/api/v1/books/${bookId}/read` 
@@ -570,23 +571,24 @@ export default function BookReadPage() {
   // Debug logging for PDF URL
   useEffect(() => {
     if (book && viewMode === 'pdf') {
+      const calculatedUrl = apiBaseUrl && bookId ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
       console.log('PDF Config:', {
         NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
         apiBaseUrl,
         bookId,
         pdf_file_url: book.pdf_file_url,
-        pdfFileUrl,
+        calculatedPdfUrl: calculatedUrl,
         authToken: authToken ? 'present' : 'missing'
       });
       
       if (!apiBaseUrl) {
         console.error('CRITICAL: NEXT_PUBLIC_API_URL is not set!');
       }
-      if (!pdfFileUrl) {
+      if (!calculatedUrl) {
         console.error('CRITICAL: pdfFileUrl is empty!');
       }
     }
-  }, [book, viewMode, apiBaseUrl, bookId, pdfFileUrl, authToken]);
+  }, [book, viewMode, bookId, authToken]);
   const pdfHttpHeaders = authToken
     ? {
         Authorization: `Bearer ${authToken}`,
@@ -726,62 +728,96 @@ export default function BookReadPage() {
         {viewMode === 'pdf' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <div className="pdf-viewer">
-              {pdfFileUrl ? (
-                <Worker workerUrl={PDF_WORKER_URL}>
-                  <Viewer
-                    key={pdfReloadKey}
-                    fileUrl={pdfFileUrl}
-                    httpHeaders={pdfHttpHeaders}
-                    plugins={[
-                      highlightPluginInstance,
-                      pageNavigationPluginInstance,
-                      scrollModePluginInstance,
-                      zoomPluginInstance,
-                    ]}
-                    defaultScale={SpecialZoomLevel.PageWidth}
-                    renderPage={renderPage}
-                    renderLoader={() => (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
-                      </div>
-                    )}
-                    renderError={(error) => {
-                      console.error('PDF Viewer Error:', error);
-                      console.error('PDF URL that failed:', pdfFileUrl);
-                      return (
-                        <div className="text-red-600 text-center py-12">
-                          <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
-                          <p className="text-sm mb-4 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
-                          <button
-                            onClick={() => setPdfReloadKey((prev) => prev + 1)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            GaÃ½tadan synanyÅŸ
-                          </button>
-                        </div>
-                      );
-                    }}
-                    onDocumentLoad={handlePdfLoad}
-                    onPageChange={handlePdfPageChange}
-                  />
-                </Worker>
-              ) : !apiBaseUrl ? (
-                <div className="text-red-600 text-center py-12">
-                  <p className="mb-2 font-bold">Configuration Error</p>
-                  <p className="text-sm mb-4 text-gray-600">NEXT_PUBLIC_API_URL is not configured</p>
-                  <p className="text-xs text-gray-500">Please check your environment variables</p>
-                </div>
-              ) : (
-                <div className="text-red-600 text-center py-12">
-                  <p className="mb-2">PDF url is missing</p>
-                  <button
-                    onClick={() => router.push(`/books/${bookId}`)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    Go back
-                  </button>
-                </div>
-              )}
+              {(() => {
+                console.log('Rendering PDF section:', {
+                  pdfFileUrl,
+                  hasPdfFileUrl: !!pdfFileUrl,
+                  apiBaseUrl,
+                  hasApiBaseUrl: !!apiBaseUrl,
+                  bookId,
+                  viewMode
+                });
+                
+                if (!apiBaseUrl) {
+                  return (
+                    <div className="text-red-600 text-center py-12">
+                      <p className="mb-2 font-bold">Configuration Error</p>
+                      <p className="text-sm mb-4 text-gray-600">NEXT_PUBLIC_API_URL is not configured</p>
+                      <p className="text-xs text-gray-500">Current value: {process.env.NEXT_PUBLIC_API_URL || 'undefined'}</p>
+                    </div>
+                  );
+                }
+                
+                if (!pdfFileUrl) {
+                  return (
+                    <div className="text-red-600 text-center py-12">
+                      <p className="mb-2">PDF url is missing</p>
+                      <p className="text-xs text-gray-500 mb-4">Book has pdf_file_url: {book?.pdf_file_url || 'no'}</p>
+                      <button
+                        onClick={() => router.push(`/books/${bookId}`)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Go back
+                      </button>
+                    </div>
+                  );
+                }
+                
+                console.log('Rendering Worker and Viewer with URL:', pdfFileUrl);
+                
+                return (
+                  <Worker workerUrl={PDF_WORKER_URL}>
+                    <Viewer
+                      key={pdfReloadKey}
+                      fileUrl={pdfFileUrl}
+                      httpHeaders={pdfHttpHeaders}
+                      plugins={[
+                        highlightPluginInstance,
+                        pageNavigationPluginInstance,
+                        scrollModePluginInstance,
+                        zoomPluginInstance,
+                      ]}
+                      defaultScale={SpecialZoomLevel.PageWidth}
+                      renderPage={renderPage}
+                      renderLoader={() => {
+                        console.log('PDF is loading...');
+                        return (
+                          <div className="flex items-center justify-center py-12">
+                            <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+                          </div>
+                        );
+                      }}
+                      renderError={(error) => {
+                        console.error('PDF Viewer Error:', error);
+                        console.error('PDF URL that failed:', pdfFileUrl);
+                        console.error('Error details:', {
+                          message: error?.message,
+                          name: error?.name,
+                          stack: error?.stack
+                        });
+                        return (
+                          <div className="text-red-600 text-center py-12">
+                            <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
+                            <p className="text-sm mb-2 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
+                            <p className="text-xs mb-4 text-gray-500">URL: {pdfFileUrl}</p>
+                            <button
+                              onClick={() => setPdfReloadKey((prev) => prev + 1)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                              GaÃ½tadan synanyÅŸ
+                            </button>
+                          </div>
+                        );
+                      }}
+                      onDocumentLoad={(e) => {
+                        console.log('PDF Document loaded successfully:', e.doc.numPages, 'pages');
+                        handlePdfLoad(e);
+                      }}
+                      onPageChange={handlePdfPageChange}
+                    />
+                  </Worker>
+                );
+              })()}
             </div>
 
             {numPages > 0 && (

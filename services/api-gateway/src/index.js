@@ -155,6 +155,15 @@ app.use('/api/v1/books', createProxyMiddleware({
       proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
       proxyReq.write(bodyData);
     }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Ensure CORS headers are present for PDF endpoints
+    if (req.path.includes('/read') || req.path.includes('/download')) {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+      proxyRes.headers['access-control-allow-methods'] = 'GET, OPTIONS';
+      proxyRes.headers['access-control-allow-headers'] = 'Authorization, Content-Type';
+      logger.info(`PDF endpoint proxied: ${req.path}, status: ${proxyRes.statusCode}, content-type: ${proxyRes.headers['content-type']}`);
+    }
   }
 }));
 

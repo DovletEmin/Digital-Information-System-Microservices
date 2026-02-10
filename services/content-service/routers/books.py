@@ -354,12 +354,18 @@ async def read_book(book_id: int, db: Session = Depends(get_db)):
         if not response.content:
             raise HTTPException(status_code=502, detail="Failed to fetch PDF: empty response")
 
+        pdf_content = response.content
         return StreamingResponse(
-            io.BytesIO(response.content),
+            io.BytesIO(pdf_content),
             media_type=response.headers.get("content-type") or "application/pdf",
             headers={
                 "Content-Disposition": _content_disposition(book.title, "inline"),
                 "Accept-Ranges": "bytes",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                "Cache-Control": "public, max-age=3600",
+                "Content-Length": str(len(pdf_content)),
             }
         )
 
@@ -389,12 +395,17 @@ async def download_book(book_id: int, db: Session = Depends(get_db)):
         if not response.content:
             raise HTTPException(status_code=502, detail="Failed to download PDF: empty response")
 
+        pdf_content = response.content
         return StreamingResponse(
-            io.BytesIO(response.content),
+            io.BytesIO(pdf_content),
             media_type=response.headers.get("content-type") or "application/pdf",
             headers={
                 "Content-Disposition": _content_disposition(book.title, "attachment"),
                 "Content-Type": "application/pdf",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                "Content-Length": str(len(pdf_content)),
             }
         )
     except httpx.HTTPError as e:
