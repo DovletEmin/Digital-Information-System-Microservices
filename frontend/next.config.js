@@ -5,7 +5,19 @@ const nextConfig = {
     domains: ['localhost', '172.20.102.83'],
     unoptimized: true
   },
-  webpack: (config) => config,
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        canvas: false,
+      };
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        canvas: false,
+      };
+    }
+    return config;
+  },
 }
 
 module.exports = nextConfig
