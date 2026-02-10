@@ -91,7 +91,15 @@ export default function BookReadPage() {
       }
 
       const { selectionData } = props;
-      const highlightAreas = (selectionData as { highlightAreas?: HighlightArea[] } | null)?.highlightAreas ?? [];
+      const selectionPayload = selectionData as
+        | {
+            highlightAreas?: HighlightArea[];
+            text?: string;
+            selectedText?: string;
+          }
+        | null;
+      const highlightAreas = selectionPayload?.highlightAreas ?? [];
+      const selectionText = selectionPayload?.text ?? selectionPayload?.selectedText ?? window.getSelection()?.toString() ?? '';
       if (!selectionData || highlightAreas.length === 0) {
         props.cancel();
         window.getSelection()?.removeAllRanges();
@@ -103,7 +111,7 @@ export default function BookReadPage() {
         {
           id: Date.now(),
           color,
-          quote: selectionData.text,
+          quote: selectionText,
           areas: highlightAreas,
         },
       ]);
