@@ -1,24 +1,45 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
-import dynamic from 'next/dynamic';
-import '@/lib/pdfConfig';
-import { pdfjs } from 'react-pdf';
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ScrollMode,
+  SpecialZoomLevel,
+  Viewer,
+  Worker,
+  type DocumentLoadEvent,
+  type PageChangeEvent,
+  type RenderPageProps,
+} from '@react-pdf-viewer/core';
+import {
+  highlightPlugin,
+  type HighlightArea,
+  type RenderHighlightTargetProps,
+  type RenderHighlightsProps,
+} from '@react-pdf-viewer/highlight';
+import { pageNavigationPlugin } from '@react-pdf-viewer/page-navigation';
+import { scrollModePlugin } from '@react-pdf-viewer/scroll-mode';
+import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
-// Import PDF components dynamically to avoid SSR issues
-const Document = dynamic(
-  () => import('react-pdf').then((mod) => mod.Document),
-  { ssr: false }
-);
 
-const Page = dynamic(
-  () => import('react-pdf').then((mod) => mod.Page),
-  { ssr: false }
-);
+const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+type PdfHighlight = {
+  id: number;
+  color: 'yellow' | 'green' | 'blue' | 'red';
+  quote: string;
+  areas: HighlightArea[];
+};
+
+const PDF_HIGHLIGHT_COLORS: Record<PdfHighlight['color'], string> = {
+  yellow: 'rgba(251, 191, 36, 0.35)',
+  green: 'rgba(34, 197, 94, 0.28)',
+  blue: 'rgba(59, 130, 246, 0.25)',
+  red: 'rgba(239, 68, 68, 0.25)',
+};
 
 export default function BookReadPage() {
   const params = useParams();
@@ -28,7 +49,7 @@ export default function BookReadPage() {
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'text' | 'pdf' | 'epub'>('text');
-  
+
   // Text reading state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -38,31 +59,141 @@ export default function BookReadPage() {
   const [currentHighlight, setCurrentHighlight] = useState<{ start: number; end: number; text: string } | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [selectedHighlightIds, setSelectedHighlightIds] = useState<number[]>([]);
-  
+
   // PDF reading state
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.2);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  
+  const [pdfReloadKey, setPdfReloadKey] = useState(0);
+  const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
+
   // EPUB reading state
   const [epubBook, setEpubBook] = useState<any>(null);
   const [epubRendition, setEpubRendition] = useState<any>(null);
   const [epubError, setEpubError] = useState<string | null>(null);
   const epubViewerRef = useRef<HTMLDivElement>(null);
-  
+
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
 
-  const CHARS_PER_PAGE = 2000; // Approximate characters per page
+  const CHARS_PER_PAGE = 2000;
+
+  const pageNavigationPluginInstance = useMemo(() => pageNavigationPlugin(), []);
+  const zoomPluginInstance = useMemo(() => zoomPlugin(), []);
+  const scrollModePluginInstance = useMemo(() => scrollModePlugin(), []);
+  const { CurrentScale } = zoomPluginInstance;
+
+  const addPdfHighlight = useCallback(
+    (props: RenderHighlightTargetProps, color: PdfHighlight['color']) => {
+      if (!authToken) {
+        props.cancel();
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+
+      const { selectionData } = props;
+      if (!selectionData || selectionData.highlightAreas.length === 0) {
+        props.cancel();
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+
+      setPdfHighlights((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          color,
+          quote: selectionData.text,
+          areas: selectionData.highlightAreas,
+        },
+      ]);
+
+      props.cancel();
+      window.getSelection()?.removeAllRanges();
+    },
+    [authToken]
+  );
+
+  const renderHighlightTarget = useCallback(
+    (props: RenderHighlightTargetProps) => {
+      if (!authToken) {
+        return <></>;
+      }
+
+      return (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${props.selectionRegion.left}%`,
+            top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
+            transform: 'translateY(6px)',
+            zIndex: 2,
+          }}
+          className="flex items-center gap-1 rounded-full border border-amber-100 bg-white/95 px-2 py-1 shadow-lg"
+        >
+          {(['yellow', 'green', 'blue', 'red'] as const).map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => addPdfHighlight(props, color)}
+              className="h-5 w-5 rounded-full border border-white shadow-sm transition-transform hover:scale-110"
+              style={{ background: PDF_HIGHLIGHT_COLORS[color] }}
+              aria-label={`Highlight ${color}`}
+            />
+          ))}
+        </div>
+      );
+    },
+    [addPdfHighlight, authToken]
+  );
+
+  const renderHighlights = useCallback(
+    (props: RenderHighlightsProps) => (
+      <div>
+        {pdfHighlights.flatMap((highlight) =>
+          highlight.areas
+            .filter((area) => area.pageIndex === props.pageIndex)
+            .map((area, index) => (
+              <div
+                key={`${highlight.id}-${index}`}
+                className="pdf-highlight-rect"
+                style={{
+                  background: PDF_HIGHLIGHT_COLORS[highlight.color],
+                  ...props.getCssProperties(area, props.rotation),
+                }}
+              />
+            ))
+        )}
+      </div>
+    ),
+    [pdfHighlights]
+  );
+
+  const highlightPluginInstance = useMemo(
+    () =>
+      highlightPlugin({
+        renderHighlightTarget,
+        renderHighlights,
+      }),
+    [renderHighlightTarget, renderHighlights]
+  );
+
+  const renderPage = useCallback(
+    (props: RenderPageProps) => (
+      <div className="pdf-page">
+        <div className="pdf-page-inner">
+          {props.canvasLayer.children}
+          {props.textLayer.children}
+          {props.annotationLayer.children}
+        </div>
+      </div>
+    ),
+    []
+  );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      pdfjs.GlobalWorkerOptions.workerSrc = `${window.location.origin}/api/pdf-worker`;
-    }
-  }, []);
+    scrollModePluginInstance.switchScrollMode(ScrollMode.Page);
+  }, [scrollModePluginInstance]);
 
-  // Auth handling
   useEffect(() => {
     const syncToken = () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -98,15 +229,11 @@ export default function BookReadPage() {
     }
   }, [authToken, bookId]);
 
-
-
-
-  // Load EPUB book when view mode is EPUB
   useEffect(() => {
     if (viewMode === 'epub' && book?.epub_file_url && epubViewerRef.current) {
       loadEpubBook();
     }
-    
+
     return () => {
       if (epubRendition) {
         epubRendition.destroy();
@@ -119,15 +246,13 @@ export default function BookReadPage() {
       setLoading(true);
       const data = await bookService.getById(bookId);
       setBook(data);
-      
-      // Determine view mode: prefer PDF, then EPUB, then text
+
       if (data.pdf_file_url) {
         setViewMode('pdf');
       } else if (data.epub_file_url) {
         setViewMode('epub');
       } else if (data.content && data.content.trim().length > 0) {
         setViewMode('text');
-        // Calculate total pages for text mode
         const pages = Math.max(1, Math.ceil(data.content.length / CHARS_PER_PAGE));
         setTotalPages(pages);
       }
@@ -142,7 +267,7 @@ export default function BookReadPage() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
       });
       if (response.ok) {
@@ -150,6 +275,7 @@ export default function BookReadPage() {
         setProgress(data);
         if (data.current_page) {
           setCurrentPage(data.current_page);
+          setPageNumber(data.current_page);
         }
       }
     } catch (error) {
@@ -162,12 +288,12 @@ export default function BookReadPage() {
 
     try {
       const progressPercentage = (page / totalPages) * 100;
-      
+
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
         body: JSON.stringify({
           book_id: bookId,
@@ -195,34 +321,31 @@ export default function BookReadPage() {
 
     try {
       setEpubError(null);
-      // Dynamically import EPUB.js
       const ePub = (await import('epubjs')).default;
       const bookInstance = ePub(book.epub_file_url);
       setEpubBook(bookInstance);
 
       if (epubViewerRef.current) {
-        // Clear previous rendition if any
         epubViewerRef.current.innerHTML = '';
-        
+
         const rendition = bookInstance.renderTo(epubViewerRef.current, {
           width: '100%',
           height: '100%',
-          spread: 'none'
+          spread: 'none',
         });
 
         await rendition.display();
         setEpubRendition(rendition);
 
-        // Get total pages (locations)
-        bookInstance.ready.then(() => {
-          return bookInstance.locations.generate(1600);
-        }).then((locations: any) => {
-          setTotalPages(locations.length);
-        });
+        bookInstance.ready
+          .then(() => bookInstance.locations.generate(1600))
+          .then((locations: any) => {
+            setTotalPages(locations.length);
+          });
       }
     } catch (error) {
       console.error('Failed to load EPUB:', error);
-      setEpubError('EPUB faýly ýüklenip bilinmedi');
+      setEpubError('EPUB faÃ½ly Ã½Ã¼klenip bilinmedi');
     }
   };
 
@@ -230,8 +353,7 @@ export default function BookReadPage() {
     if (newPage < 1 || newPage > totalPages) return;
     setCurrentPage(newPage);
     saveProgress(newPage);
-    
-    // Handle EPUB navigation
+
     if (viewMode === 'epub' && epubRendition && epubBook) {
       epubRendition.display(epubBook.locations.cfiFromLocation(newPage - 1));
     }
@@ -269,7 +391,7 @@ export default function BookReadPage() {
         const pageOffset = (currentPage - 1) * CHARS_PER_PAGE;
         const startOffset = pageOffset + getTextOffset(contentElement, range.startContainer, range.startOffset);
         const endOffset = startOffset + text.length;
-        
+
         const overlappingHighlights = highlights.filter(
           (highlight) => highlight.start_offset < endOffset && highlight.end_offset > startOffset
         );
@@ -286,9 +408,7 @@ export default function BookReadPage() {
 
     try {
       if (selectedHighlightIds.length > 0) {
-        await Promise.all(
-          selectedHighlightIds.map((id) => savedService.updateBookHighlight(id, { color }))
-        );
+        await Promise.all(selectedHighlightIds.map((id) => savedService.updateBookHighlight(id, { color })));
       } else {
         await savedService.createBookHighlight({
           book_id: bookId,
@@ -330,30 +450,29 @@ export default function BookReadPage() {
   };
 
   const applyHighlights = (content: string, pageStart: number, pageEnd: number) => {
-    const pageHighlights = highlights.filter(
-      (h) => h.start_offset < pageEnd && h.end_offset > pageStart
-    );
+    const pageHighlights = highlights.filter((h) => h.start_offset < pageEnd && h.end_offset > pageStart);
 
     if (pageHighlights.length === 0) return content;
 
     const sortedHighlights = [...pageHighlights].sort((a, b) => a.start_offset - b.start_offset);
     let result = '';
-    let lastIndex =0;
+    let lastIndex = 0;
 
     sortedHighlights.forEach((highlight) => {
       const localStart = Math.max(0, highlight.start_offset - pageStart);
       const localEnd = Math.min(content.length, highlight.end_offset - pageStart);
-      
+
       if (localStart < lastIndex || localStart >= content.length) return;
 
       result += content.slice(lastIndex, localStart);
 
-      const colorClass = {
-        yellow: 'bg-yellow-200',
-        green: 'bg-green-200',
-        blue: 'bg-blue-200',
-        red: 'bg-red-200',
-      }[highlight.color] || 'bg-yellow-200';
+      const colorClass =
+        {
+          yellow: 'bg-yellow-200',
+          green: 'bg-green-200',
+          blue: 'bg-blue-200',
+          red: 'bg-red-200',
+        }[highlight.color] || 'bg-yellow-200';
 
       result += `<mark class="${colorClass} px-0.5 rounded">${content.slice(localStart, localEnd)}</mark>`;
       lastIndex = localEnd;
@@ -365,30 +484,24 @@ export default function BookReadPage() {
 
   const getPageContent = () => {
     if (!book || !book.content) return '';
-    
+
     const start = (currentPage - 1) * CHARS_PER_PAGE;
     const end = start + CHARS_PER_PAGE;
     const pageContent = book.content.slice(start, end);
-    
+
     return applyHighlights(pageContent, start, end);
   };
 
-  // PDF handlers
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    setPdfError(null);
+  const handlePdfLoad = (event: DocumentLoadEvent) => {
+    setNumPages(event.doc.numPages);
+    setPageNumber(1);
   };
 
-  const onDocumentLoadError = (error: Error) => {
-    console.error('Error loading PDF:', error);
-    setPdfError('Не удалось загрузить PDF файл');
-  };
-
-  const handlePdfPageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > numPages) return;
-    setPageNumber(newPage);
-    if (authToken) {
-      savePdfProgress(newPage, numPages);
+  const handlePdfPageChange = (event: PageChangeEvent) => {
+    const nextPage = event.currentPage + 1;
+    setPageNumber(nextPage);
+    if (authToken && numPages > 0) {
+      savePdfProgress(nextPage, numPages);
     }
   };
 
@@ -397,12 +510,12 @@ export default function BookReadPage() {
 
     try {
       const progressPercentage = (page / total) * 100;
-      
+
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
         body: JSON.stringify({
           book_id: bookId,
@@ -416,27 +529,25 @@ export default function BookReadPage() {
     }
   };
 
+  const handlePdfNav = (newPage: number) => {
+    if (newPage < 1 || newPage > numPages) return;
+    pageNavigationPluginInstance.jumpToPage(newPage - 1);
+  };
+
   const handleZoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.2, 3));
+    zoomPluginInstance.zoomIn();
   };
 
   const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.2, 0.5));
+    zoomPluginInstance.zoomOut();
   };
 
-  const getPdfFile = () => {
-    if (!book?.pdf_file_url) return '';
-
-    const url = `/api/books/${bookId}/read`;
-    if (!authToken) return url;
-
-    return {
-      url,
-      httpHeaders: {
+  const pdfFileUrl = book?.pdf_file_url ? `/api/books/${bookId}/read` : '';
+  const pdfHttpHeaders = authToken
+    ? {
         Authorization: `Bearer ${authToken}`,
-      },
-    };
-  };
+      }
+    : undefined;
 
   if (loading) {
     return (
@@ -450,11 +561,8 @@ export default function BookReadPage() {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
-          <h1 className="text-2xl font-bold mb-4">Kitap tapylmady ýa-da okalyp bilinmeýär</h1>
-          <button
-            onClick={() => router.push(`/books/${bookId}`)}
-            className="text-blue-400 hover:underline"
-          >
+          <h1 className="text-2xl font-bold mb-4">Kitap tapylmady Ã½a-da okalyp bilinmeÃ½Ã¤r</h1>
+          <button onClick={() => router.push(`/books/${bookId}`)} className="text-blue-400 hover:underline">
             Yza dolan
           </button>
         </div>
@@ -464,7 +572,6 @@ export default function BookReadPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50">
-      {/* Header */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="container-custom py-3 flex items-center justify-between">
           <button
@@ -476,9 +583,7 @@ export default function BookReadPage() {
           </button>
 
           <div className="flex-1 text-center px-4">
-            <h1 className="text-sm sm:text-base font-medium text-gray-900 truncate">
-              {book.title}
-            </h1>
+            <h1 className="text-sm sm:text-base font-medium text-gray-900 truncate">{book.title}</h1>
           </div>
 
           <button
@@ -490,16 +595,21 @@ export default function BookReadPage() {
         </div>
       </div>
 
-      {/* Settings Panel */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40" onClick={() => setShowSettings(false)}>
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mt-20" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40"
+          onClick={() => setShowSettings(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mt-20"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-bold mb-4">Sazlamalar</h3>
-            
+
             {viewMode === 'text' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Harp ölçegi: {fontSize}px
+                  Harp Ã¶lÃ§egi: {fontSize}px
                 </label>
                 <input
                   type="range"
@@ -514,16 +624,14 @@ export default function BookReadPage() {
 
             {viewMode === 'pdf' && (
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Масштаб: {Math.round(scale * 100)}%
-                </label>
-                <div className="flex gap-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">ÐœÐ°ÑÑˆÑ‚Ð°Ð±:</label>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={handleZoomOut}
                     className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                   >
                     <ZoomOut className="inline mr-2" size={16} />
-                    Кичелт
+                    ÐšÐ¸Ñ‡ÐµÐ»Ñ‚
                   </button>
                   <button
                     onClick={handleZoomIn}
@@ -533,6 +641,9 @@ export default function BookReadPage() {
                     Uly
                   </button>
                 </div>
+                <div className="mt-3 text-xs text-gray-500">
+                  <CurrentScale>{({ scale }) => <span>Häzirki: {Math.round(scale * 100)}%</span>}</CurrentScale>
+                </div>
               </div>
             )}
 
@@ -540,77 +651,68 @@ export default function BookReadPage() {
               onClick={() => setShowSettings(false)}
               className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
             >
-              Ýap
+              Ãap
             </button>
           </div>
         </div>
       )}
 
-      {/* Book Content Area */}
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {viewMode === 'pdf' ? (
-          /* PDF Viewer */
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            <div className="flex justify-center items-center p-4 bg-gray-50">
-              {pdfError ? (
-                <div className="text-red-600 text-center py-8">
-                  <p className="mb-4">{pdfError}</p>
-                  <button
-                    onClick={() => {
-                      setPdfError(null);
-                      fetchBook();
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    Gaýtadan synanyş
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center">
-                  <Document
-                    file={getPdfFile()}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={onDocumentLoadError}
-                    loading={
-                      <div className="flex items-center justify-center py-12">
-                        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
-                      </div>
-                    }
-                  >
-                    <Page
-                      pageNumber={pageNumber}
-                      scale={scale}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                      loading={
-                        <div className="flex items-center justify-center py-12">
-                          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-400 border-t-gray-700"></div>
-                        </div>
-                      }
-                    />
-                  </Document>
-                </div>
-              )}
+            <div className="pdf-viewer">
+              <Worker workerUrl={PDF_WORKER_URL}>
+                <Viewer
+                  key={pdfReloadKey}
+                  fileUrl={pdfFileUrl}
+                  httpHeaders={pdfHttpHeaders}
+                  plugins={[
+                    highlightPluginInstance,
+                    pageNavigationPluginInstance,
+                    scrollModePluginInstance,
+                    zoomPluginInstance,
+                  ]}
+                  defaultScale={SpecialZoomLevel.PageWidth}
+                  renderPage={renderPage}
+                  renderLoader={() => (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+                    </div>
+                  )}
+                  renderError={() => (
+                    <div className="text-red-600 text-center py-12">
+                      <p className="mb-4">ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ PDF Ñ„Ð°Ð¹Ð»</p>
+                      <button
+                        onClick={() => setPdfReloadKey((prev) => prev + 1)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        GaÃ½tadan synanyÅŸ
+                      </button>
+                    </div>
+                  )}
+                  onDocumentLoad={handlePdfLoad}
+                  onPageChange={handlePdfPageChange}
+                />
+              </Worker>
             </div>
 
-            {/* PDF Navigation Footer */}
-            {!pdfError && numPages > 0 && (
+            {numPages > 0 && (
               <div className="border-t bg-gray-50 px-8 py-4">
                 <div className="flex items-center justify-between">
                   <button
-                    onClick={() => handlePdfPageChange(pageNumber - 1)}
+                    onClick={() => handlePdfNav(pageNumber - 1)}
                     disabled={pageNumber === 1}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft size={18} />
-                    <span className="hidden sm:inline">Öňki</span>
+                    <span className="hidden sm:inline">Ã–Åˆki</span>
                   </button>
 
                   <div className="flex items-center gap-3">
                     {authToken && progress && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Bookmark size={16} className="text-primary" />
-                        <span className="hidden sm:inline">Ýatda saklandy</span>
+                        <span className="hidden sm:inline">Ãatda saklandy</span>
                       </div>
                     )}
                     <span className="text-sm font-medium text-gray-900">
@@ -619,7 +721,7 @@ export default function BookReadPage() {
                   </div>
 
                   <button
-                    onClick={() => handlePdfPageChange(pageNumber + 1)}
+                    onClick={() => handlePdfNav(pageNumber + 1)}
                     disabled={pageNumber === numPages}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
@@ -628,7 +730,6 @@ export default function BookReadPage() {
                   </button>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="mt-4">
                   <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div
@@ -641,7 +742,6 @@ export default function BookReadPage() {
             )}
           </div>
         ) : viewMode === 'epub' ? (
-          /* EPUB Viewer */
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <div className="flex justify-center items-center p-4 bg-gray-50">
               {epubError ? (
@@ -654,19 +754,14 @@ export default function BookReadPage() {
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
-                    Gaýtadan synanyş
+                    GaÃ½tadan synanyÅŸ
                   </button>
                 </div>
               ) : (
-                <div 
-                  ref={epubViewerRef}
-                  className="epub-viewer w-full"
-                  style={{ height: '600px', minHeight: '600px' }}
-                />
+                <div ref={epubViewerRef} className="epub-viewer w-full" style={{ height: '600px', minHeight: '600px' }} />
               )}
             </div>
 
-            {/* EPUB Navigation Footer */}
             {!epubError && epubRendition && (
               <div className="border-t bg-gray-50 px-8 py-4">
                 <div className="flex items-center justify-between">
@@ -680,19 +775,17 @@ export default function BookReadPage() {
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <ChevronLeft size={18} />
-                    <span className="hidden sm:inline">Öňki</span>
+                    <span className="hidden sm:inline">Ã–Åˆki</span>
                   </button>
 
                   <div className="flex items-center gap-3">
                     {authToken && progress && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Bookmark size={16} className="text-primary" />
-                        <span className="hidden sm:inline">Ýatda saklandy</span>
+                        <span className="hidden sm:inline">Ãatda saklandy</span>
                       </div>
                     )}
-                    <span className="text-sm font-medium text-gray-900">
-                      EPUB
-                    </span>
+                    <span className="text-sm font-medium text-gray-900">EPUB</span>
                   </div>
 
                   <button
@@ -712,9 +805,7 @@ export default function BookReadPage() {
             )}
           </div>
         ) : (
-          /* Text Viewer */
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            {/* Book Content */}
             <div
               id="book-page-content"
               className="px-8 sm:px-12 md:px-16 py-12 min-h-[600px] prose prose-gray max-w-none"
@@ -728,7 +819,6 @@ export default function BookReadPage() {
               dangerouslySetInnerHTML={{ __html: getPageContent() }}
             />
 
-            {/* Text Navigation Footer */}
             <div className="border-t bg-gray-50 px-8 py-4">
               <div className="flex items-center justify-between">
                 <button
@@ -737,14 +827,14 @@ export default function BookReadPage() {
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft size={18} />
-                  <span className="hidden sm:inline">Öňki</span>
+                  <span className="hidden sm:inline">Ã–Åˆki</span>
                 </button>
 
                 <div className="flex items-center gap-3">
                   {authToken && progress && (
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Bookmark size={16} className="text-primary" />
-                      <span className="hidden sm:inline">Ýatda saklandy</span>
+                      <span className="hidden sm:inline">Ãatda saklandy</span>
                     </div>
                   )}
                   <span className="text-sm font-medium text-gray-900">
@@ -762,7 +852,6 @@ export default function BookReadPage() {
                 </button>
               </div>
 
-              {/* Progress Bar */}
               <div className="mt-4">
                 <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
                   <div
@@ -776,14 +865,13 @@ export default function BookReadPage() {
         )}
       </div>
 
-      {/* Color Picker for Highlights */}
       {showColorPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/20" onClick={() => setShowColorPicker(false)} />
           <div className="relative bg-white rounded-lg shadow-xl p-4 max-w-xs w-full">
-            <p className="text-sm font-medium text-gray-700 mb-3">Reňk saýlaň:</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">ReÅˆk saÃ½laÅˆ:</p>
             <div className="flex gap-2 mb-3">
-              {['yellow', 'green', 'blue', 'red'].map((color) => (
+              {(['yellow', 'green', 'blue', 'red'] as const).map((color) => (
                 <button
                   key={color}
                   onClick={() => handleHighlight(color)}
@@ -803,7 +891,7 @@ export default function BookReadPage() {
               onClick={handleClearHighlight}
               className="w-full px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
             >
-              {selectedHighlightIds.length > 0 ? 'Belgiňi aýyr' : 'Goýbolsun et'}
+              {selectedHighlightIds.length > 0 ? 'BelgiÅˆi aÃ½yr' : 'GoÃ½bolsun et'}
             </button>
           </div>
         </div>
