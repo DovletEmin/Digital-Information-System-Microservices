@@ -1,5 +1,5 @@
 """
-Скрипт для создания/обновления таблиц базы данных
+Ð¡ÐºÑ€Ð¸Ð¿Ñ‚ Ð´Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ/Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ñ Ñ‚Ð°Ð±Ð»Ð¸Ñ† Ð±Ð°Ð·Ñ‹ Ð´Ð°Ð½Ð½Ñ‹Ñ…
 """
 from sqlalchemy import inspect, text
 from database import Base, engine
@@ -11,12 +11,12 @@ from models import (
 )
 
 def create_tables():
-    """Создает все таблицы в базе данных"""
-    print("Создание таблиц в базе данных...")
+    """Ð¡Ð¾Ð·Ð´Ð°ÐµÑ‚ Ð²ÑÐµ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ñ‹ Ð² Ð±Ð°Ð·Ðµ Ð´Ð°Ð½Ð½Ñ‹Ñ…"""
+    print("Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ Ñ‚Ð°Ð±Ð»Ð¸Ñ† Ð² Ð±Ð°Ð·Ðµ Ð´Ð°Ð½Ð½Ñ‹Ñ…...")
     Base.metadata.create_all(bind=engine)
     ensure_columns()
-    print("✓ Таблицы успешно созданы!")
-    print("\nСозданные таблицы:")
+    print("âœ“ Ð¢Ð°Ð±Ð»Ð¸Ñ†Ñ‹ ÑƒÑÐ¿ÐµÑˆÐ½Ð¾ ÑÐ¾Ð·Ð´Ð°Ð½Ñ‹!")
+    print("\nÐ¡Ð¾Ð·Ð´Ð°Ð½Ð½Ñ‹Ðµ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ñ‹:")
     print("- articles")
     print("- books")
     print("- dissertations")
@@ -31,20 +31,33 @@ def create_tables():
     print("- dissertation_highlights")
 
 def ensure_columns():
-    """Добавляет недостающие колонки в существующие таблицы"""
+    """Ð”Ð¾Ð±Ð°Ð²Ð»ÑÐµÑ‚ Ð½ÐµÐ´Ð¾ÑÑ‚Ð°ÑŽÑ‰Ð¸Ðµ ÐºÐ¾Ð»Ð¾Ð½ÐºÐ¸ Ð² ÑÑƒÑ‰ÐµÑÑ‚Ð²ÑƒÑŽÑ‰Ð¸Ðµ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ñ‹"""
     inspector = inspect(engine)
 
     def add_column_if_missing(table_name: str, column_name: str, column_type: str):
         columns = {col["name"] for col in inspector.get_columns(table_name)}
         if column_name not in columns:
-            print(f"Добавление колонки {table_name}.{column_name}...")
+            print(f"Ð”Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ ÐºÐ¾Ð»Ð¾Ð½ÐºÐ¸ {table_name}.{column_name}...")
             with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type};"))
+
+    def drop_not_null_if_present(table_name: str, column_name: str):
+        columns = {col["name"]: col for col in inspector.get_columns(table_name)}
+        col = columns.get(column_name)
+        if col and not col.get("nullable", True):
+            print(f"Ð£Ð±Ð¸Ñ€Ð°ÐµÐ¼ NOT NULL Ñ {table_name}.{column_name}...")
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN {column_name} DROP NOT NULL;"))
 
     add_column_if_missing("articles", "authors_workplace", "VARCHAR(255)")
     add_column_if_missing("articles", "thumbnail", "VARCHAR(500)")
     add_column_if_missing("books", "authors_workplace", "VARCHAR(255)")
     add_column_if_missing("books", "thumbnail", "VARCHAR(500)")
+    add_column_if_missing("books", "description", "TEXT")
+    add_column_if_missing("books", "content", "TEXT")
+    add_column_if_missing("books", "pdf_file_url", "VARCHAR(500)")
+    add_column_if_missing("books", "epub_file_url", "VARCHAR(500)")
+    drop_not_null_if_present("books", "content")
     add_column_if_missing("dissertations", "authors_workplace", "VARCHAR(255)")
     add_column_if_missing("dissertations", "thumbnail", "VARCHAR(500)")
 

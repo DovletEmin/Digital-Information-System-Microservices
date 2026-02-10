@@ -8,6 +8,7 @@ import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
 import dynamic from 'next/dynamic';
 import '@/lib/pdfConfig';
+import { pdfjs } from 'react-pdf';
 
 // Dynamic import to avoid SSR issues
 const Document = dynamic(() => import('react-pdf').then(mod => mod.Document), { ssr: false });
@@ -37,6 +38,12 @@ export default function BookReadPage() {
   const [contentType, setContentType] = useState<'text' | 'pdf' | 'epub'>('text');
 
   const CHARS_PER_PAGE = 2000;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      pdfjs.GlobalWorkerOptions.workerSrc = `${window.location.origin}/api/pdf-worker`;
+    }
+  }, []);
 
   // Auth handling
   useEffect(() => {

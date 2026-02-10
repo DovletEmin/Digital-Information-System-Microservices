@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight, Bookmark, Settings, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import '@/lib/pdfConfig';
+import { pdfjs } from 'react-pdf';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
@@ -54,6 +55,12 @@ export default function BookReadPage() {
   const [progress, setProgress] = useState<any>(null);
 
   const CHARS_PER_PAGE = 2000; // Approximate characters per page
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      pdfjs.GlobalWorkerOptions.workerSrc = `${window.location.origin}/api/pdf-worker`;
+    }
+  }, []);
 
   // Auth handling
   useEffect(() => {
