@@ -686,7 +686,7 @@ export default function BookReadPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">ÐœÐ°ÑÑˆÑ‚Ð°Ð±:</label>
                 <div className="flex items-center gap-2">
                   <ZoomOutButton>
-                    {({ onClick }) => (
+                    {({ onClick }: any) => (
                       <button
                         onClick={onClick}
                         className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
@@ -697,7 +697,7 @@ export default function BookReadPage() {
                     )}
                   </ZoomOutButton>
                   <ZoomInButton>
-                    {({ onClick }) => (
+                    {({ onClick }: any) => (
                       <button
                         onClick={onClick}
                         className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
@@ -709,7 +709,7 @@ export default function BookReadPage() {
                   </ZoomInButton>
                 </div>
                 <div className="mt-3 text-xs text-gray-500">
-                  <CurrentScale>{({ scale }) => <span>Häzirki: {Math.round(scale * 100)}%</span>}</CurrentScale>
+                  <CurrentScale>{({ scale }: any) => <span>Häzirki: {Math.round(scale * 100)}%</span>}</CurrentScale>
                 </div>
               </div>
             )}
@@ -787,13 +787,12 @@ export default function BookReadPage() {
                           </div>
                         );
                       }}
-                      renderError={(error) => {
+                      renderError={(error: any) => {
                         console.error('PDF Viewer Error:', error);
                         console.error('PDF URL that failed:', pdfFileUrl);
                         console.error('Error details:', {
                           message: error?.message,
                           name: error?.name,
-                          stack: error?.stack
                         });
                         return (
                           <div className="text-red-600 text-center py-12">
@@ -809,7 +808,7 @@ export default function BookReadPage() {
                           </div>
                         );
                       }}
-                      onDocumentLoad={(e) => {
+                      onDocumentLoad={(e: DocumentLoadEvent) => {
                         console.log('PDF Document loaded successfully:', e.doc.numPages, 'pages');
                         handlePdfLoad(e);
                       }}
