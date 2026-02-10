@@ -595,6 +595,40 @@ export default function BookReadPage() {
       }
     : undefined;
 
+  const [pdfValid, setPdfValid] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const validatePdf = async () => {
+      if (viewMode !== 'pdf' || !pdfFileUrl) {
+        if (mounted) setPdfValid(null);
+        return;
+      }
+
+      try {
+        const resp = await fetch(pdfFileUrl, {
+          method: 'HEAD',
+          headers: (pdfHttpHeaders as Record<string, string>) || undefined,
+        });
+
+        if (!mounted) return;
+
+        const contentType = resp.headers.get('content-type') || '';
+        setPdfValid(resp.ok && contentType.toLowerCase().includes('pdf'));
+      } catch (err) {
+        if (!mounted) return;
+        setPdfValid(false);
+      }
+    };
+
+    validatePdf();
+
+    return () => {
+      mounted = false;
+    };
+  }, [viewMode, pdfFileUrl, authToken]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -748,6 +782,30 @@ export default function BookReadPage() {
                   );
                 }
                 
+                if (pdfValid === false) {
+                  return (
+                    <div className="text-red-600 text-center py-12">
+                      <p className="mb-2">PDF validation failed</p>
+                      <p className="text-sm mb-4 text-gray-600">The PDF endpoint did not return a valid PDF response.</p>
+                      <p className="text-xs text-gray-500 mb-4">URL: {pdfFileUrl}</p>
+                      <button
+                        onClick={() => setPdfReloadKey((prev) => prev + 1)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (pdfValid === null) {
+                  return (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
+                    </div>
+                  );
+                }
+
                 if (!pdfFileUrl) {
                   return (
                     <div className="text-red-600 text-center py-12">
