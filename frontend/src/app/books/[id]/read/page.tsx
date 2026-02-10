@@ -8,14 +8,6 @@ import '@/lib/pdfConfig';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
-import { pdfjs } from 'react-pdf';
-
-if (typeof window !== 'undefined') {
-  const origin = window.location.origin;
-  pdfjs.GlobalWorkerOptions.workerSrc = `${origin}/pdf.worker.js`;
-}
-
-
 // Import PDF components dynamically to avoid SSR issues
 const Document = dynamic(
   () => import('react-pdf').then((mod) => mod.Document),
