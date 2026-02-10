@@ -543,7 +543,8 @@ export default function BookReadPage() {
     pageNavigationPluginInstance.jumpToPage(newPage - 1);
   };
 
-  const pdfFileUrl = book?.pdf_file_url ? `/api/books/${bookId}/read` : '';
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+  const pdfFileUrl = book?.pdf_file_url ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
   const pdfHttpHeaders = authToken
     ? {
         Authorization: `Bearer ${authToken}`,

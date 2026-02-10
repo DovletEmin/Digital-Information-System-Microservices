@@ -143,7 +143,8 @@ export default function BookDetailsPage() {
       // For PDF, use same-origin proxy to avoid CORS
       let downloadUrl = fileUrl;
       if (fileType === 'pdf') {
-        downloadUrl = `/api/books/${bookId}/download`;
+        const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+        downloadUrl = `${apiBaseUrl}/api/v1/books/${bookId}/download`;
       }
 
       // Try fetching as blob first
