@@ -578,14 +578,25 @@ export default function BookReadPage() {
   };
 
   const getPageContent = () => {
-    if (!book || typeof book.content !== 'string' || book.content.length === 0) return '';
+  // Гарантируем, что content — строка
+  const content = typeof book?.content === "string" ? book.content : "";
 
-    const start = (currentPage - 1) * CHARS_PER_PAGE;
-    const end = start + CHARS_PER_PAGE;
-    const pageContent = book.content.slice(start, end);
+  // Если пусто — возвращаем пустую строку
+  if (content.length === 0) return "";
 
-    return applyHighlights(pageContent, start, end);
-  };
+  // Защищаем currentPage
+  const safePage = Math.max(1, currentPage || 1);
+
+  const start = (safePage - 1) * CHARS_PER_PAGE;
+  const end = start + CHARS_PER_PAGE;
+
+  const pageContent = content.slice(start, end);
+
+  // Если applyHighlights не определена — просто возвращаем текст
+  return applyHighlights ? applyHighlights(pageContent, start, end) : pageContent;
+};
+
+
 
   const handlePdfLoad = (event: DocumentLoadEvent) => {
     setNumPages(event.doc.numPages);
