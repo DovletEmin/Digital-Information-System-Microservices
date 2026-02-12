@@ -123,6 +123,10 @@ export default function BookReadPage() {
   const scrollModePluginInstance = useMemo(() => scrollModePlugin(), []);
   const { CurrentScale, ZoomIn: ZoomInButton, ZoomOut: ZoomOutButton } = zoomPluginInstance;
 
+  // NOTE: highlightPlugin initialization removed to avoid running third-party
+  // plugin code during render which was causing client-side exceptions.
+  // The highlight UI functions remain but the plugin is not registered.
+
   const addPdfHighlight = useCallback(
     (props: RenderHighlightTargetProps, color: PdfHighlight['color']) => {
       if (!authToken) {
@@ -218,14 +222,7 @@ export default function BookReadPage() {
     [pdfHighlights]
   );
 
-  const highlightPluginInstance = useMemo(
-    () =>
-      highlightPlugin({
-        renderHighlightTarget,
-        renderHighlights,
-      }),
-    [renderHighlightTarget, renderHighlights]
-  );
+  // highlightPluginInstance intentionally omitted
 
   const renderPage = useCallback(
     (props: RenderPageProps) => (
@@ -241,7 +238,11 @@ export default function BookReadPage() {
   );
 
   useEffect(() => {
-    scrollModePluginInstance.switchScrollMode(ScrollMode.Page);
+    try {
+      scrollModePluginInstance.switchScrollMode(ScrollMode.Page);
+    } catch (err) {
+      console.error('scrollModePlugin switch failed:', err);
+    }
   }, [scrollModePluginInstance]);
 
   useEffect(() => {
