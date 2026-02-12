@@ -885,121 +885,26 @@ export default function BookReadPage() {
         {viewMode === 'pdf' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <div className="pdf-viewer">
+              {/* Quick safe fallback: render PDF via iframe to avoid third-party viewer crashes. */}
               {(() => {
-                console.log('Rendering PDF section:', {
-                  pdfFileUrl,
-                  hasPdfFileUrl: !!pdfFileUrl,
-                  apiBaseUrl,
-                  hasApiBaseUrl: !!apiBaseUrl,
-                  bookId,
-                  viewMode
-                });
-                
-                if (!apiBaseUrl) {
-                  return (
-                    <div className="text-red-600 text-center py-12">
-                      <p className="mb-2 font-bold">Configuration Error</p>
-                      <p className="text-sm mb-4 text-gray-600">NEXT_PUBLIC_API_URL is not configured</p>
-                      <p className="text-xs text-gray-500">Current value: {process.env.NEXT_PUBLIC_API_URL || 'undefined'}</p>
-                    </div>
-                  );
-                }
-                
-                if (pdfValid === false) {
-                  return (
-                    <div className="text-red-600 text-center py-12">
-                      <p className="mb-2">PDF validation failed</p>
-                      <p className="text-sm mb-4 text-gray-600">The PDF endpoint did not return a valid PDF response.</p>
-                      <p className="text-xs text-gray-500 mb-4">URL: {pdfFileUrl}</p>
-                      <button
-                        onClick={() => setPdfReloadKey((prev) => prev + 1)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  );
-                }
-
-                if (pdfValid === null) {
-                  return (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
-                    </div>
-                  );
-                }
-
-                if (!pdfFileUrl) {
+                const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
+                if (!viewerFileUrl) {
                   return (
                     <div className="text-red-600 text-center py-12">
                       <p className="mb-2">PDF url is missing</p>
                       <p className="text-xs text-gray-500 mb-4">Book has pdf_file_url: {book?.pdf_file_url || 'no'}</p>
-                      <button
-                        onClick={() => router.push(`/books/${bookId}`)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
+                      <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                         Go back
                       </button>
                     </div>
                   );
                 }
-                
-                const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
-                console.log('Rendering Worker and Viewer with URL:', viewerFileUrl);
-                console.log('Viewer URL type:', typeof viewerFileUrl, viewerFileUrl && typeof viewerFileUrl === 'string' ? viewerFileUrl.length : 'non-string-or-empty');
-                // Wrap Viewer in ErrorBoundary; if it fails, show iframe fallback
-                // Load the viewer as a client-only dynamic component to isolate errors
-                const PdfViewer = dynamic(() => import('../PdfViewerClient'), { ssr: false, loading: () => <div className="flex items-center justify-center py-12"><div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div></div> });
-
-                if (hasClientError) {
-                  console.warn('Client error detected, using iframe fallback');
-                  return (
-                    <div className="p-4">
-                      <div className="text-sm text-gray-600 mb-2">A client-side error occurred; displaying PDF via iframe.</div>
-                      <iframe title="pdf-fallback" src={viewerFileUrl ?? undefined} style={{ width: '100%', height: '800px', border: 'none' }} />
-                    </div>
-                  );
-                }
-
-                if (viewerError) {
-                  console.warn('Viewer previously failed, using iframe fallback', viewerError);
-                  return (
-                    <div className="p-4">
-                      <iframe title="pdf-fallback" src={viewerFileUrl ?? undefined} style={{ width: '100%', height: '800px', border: 'none' }} />
-                    </div>
-                  );
-                }
 
                 return (
-                  <PdfViewer
-                    viewerFileUrl={viewerFileUrl}
-                    pdfHttpHeaders={pdfHttpHeaders}
-                    pdfReloadKey={pdfReloadKey}
-                    pageNavigationPluginInstance={pageNavigationPluginInstance}
-                    scrollModePluginInstance={scrollModePluginInstance}
-                    zoomPluginInstance={zoomPluginInstance}
-                    renderPage={renderPage}
-                    renderError={(error: any) => {
-                      console.error('PDF Viewer Error:', error);
-                      return (
-                        <div className="text-red-600 text-center py-12">
-                          <p className="mb-4">Failed to load PDF file</p>
-                          <p className="text-sm mb-2 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
-                          <p className="text-xs mb-4 text-gray-500">URL: {pdfFileUrl}</p>
-                          <button onClick={() => setPdfReloadKey((prev) => prev + 1)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                            Retry
-                          </button>
-                        </div>
-                      );
-                    }}
-                    onDocumentLoad={(e: DocumentLoadEvent) => {
-                      console.log('PDF Document loaded successfully:', e.doc.numPages, 'pages');
-                      handlePdfLoad(e);
-                    }}
-                    onPageChange={handlePdfPageChange}
-                    workerUrl={PDF_WORKER_URL}
-                    defaultScale={SpecialZoomLevel.PageWidth}
-                  />
+                  <div className="p-4">
+                    <div className="text-sm text-gray-600 mb-2">Using safe iframe PDF viewer.</div>
+                    <iframe title="pdf-iframe" src={viewerFileUrl} style={{ width: '100%', height: '900px', border: 'none' }} />
+                  </div>
                 );
               })()}
             </div>
