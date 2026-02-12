@@ -639,6 +639,7 @@ export default function BookReadPage() {
   const [pdfValid, setPdfValid] = useState<boolean | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<any>(null);
+  const [hasClientError, setHasClientError] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
@@ -689,6 +690,26 @@ export default function BookReadPage() {
       mounted = false;
     };
   }, [viewMode, pdfFileUrl, authToken]);
+
+  // Global client error handlers: if a runtime error occurs anywhere, switch to a safe iframe fallback
+  useEffect(() => {
+    const onError = (ev: ErrorEvent) => {
+      console.error('Global error captured:', ev.error || ev.message, ev);
+      setHasClientError(true);
+    };
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      console.error('Unhandled rejection captured:', ev.reason || ev, ev);
+      setHasClientError(true);
+    };
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection as EventListener);
+
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection as EventListener);
+    };
+  }, []);
 
   // Fallback: fetch PDF as ArrayBuffer and create local blob URL for Viewer
   useEffect(() => {
@@ -929,6 +950,16 @@ export default function BookReadPage() {
                 // Wrap Viewer in ErrorBoundary; if it fails, show iframe fallback
                 // Load the viewer as a client-only dynamic component to isolate errors
                 const PdfViewer = dynamic(() => import('../PdfViewerClient'), { ssr: false, loading: () => <div className="flex items-center justify-center py-12"><div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div></div> });
+
+                if (hasClientError) {
+                  console.warn('Client error detected, using iframe fallback');
+                  return (
+                    <div className="p-4">
+                      <div className="text-sm text-gray-600 mb-2">A client-side error occurred; displaying PDF via iframe.</div>
+                      <iframe title="pdf-fallback" src={viewerFileUrl ?? undefined} style={{ width: '100%', height: '800px', border: 'none' }} />
+                    </div>
+                  );
+                }
 
                 if (viewerError) {
                   console.warn('Viewer previously failed, using iframe fallback', viewerError);
