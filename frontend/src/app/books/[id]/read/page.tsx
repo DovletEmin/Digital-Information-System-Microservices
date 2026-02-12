@@ -1,4 +1,6 @@
-﻿import React from 'react';
+﻿"use client";
+
+import React from 'react';
 
 class ErrorBoundary extends React.Component<{
   children: React.ReactNode;
