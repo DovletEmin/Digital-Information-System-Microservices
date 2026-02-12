@@ -32,8 +32,6 @@ class ErrorBoundary extends React.Component<{
   }
 }
 
-'use client';
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings, ZoomIn, ZoomOut } from 'lucide-react';
