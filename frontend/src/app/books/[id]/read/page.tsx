@@ -566,9 +566,14 @@ export default function BookReadPage() {
 
   // Calculate PDF URL
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  const pdfFileUrl = book?.pdf_file_url && bookId !== null && apiBaseUrl 
-    ? `${apiBaseUrl}/api/v1/books/${bookId}/read` 
-    : '';
+  // Prefer direct media URL when available (helps avoid proxy/auth issues)
+  const pdfFileUrl = (() => {
+    if (!book?.pdf_file_url) return '';
+    // If book.pdf_file_url is an absolute URL, use it directly
+    if (/^https?:\/\//i.test(book.pdf_file_url)) return book.pdf_file_url;
+    if (bookId !== null && apiBaseUrl) return `${apiBaseUrl}/api/v1/books/${bookId}/read`;
+    return '';
+  })();
   
   // Debug logging for PDF URL
   useEffect(() => {
@@ -609,6 +614,7 @@ export default function BookReadPage() {
       }
 
       try {
+        console.log('Validating PDF URL via HEAD:', pdfFileUrl);
         const resp = await fetch(pdfFileUrl, {
           method: 'HEAD',
           headers: (pdfHttpHeaders as Record<string, string>) || undefined,
@@ -617,9 +623,26 @@ export default function BookReadPage() {
         if (!mounted) return;
 
         const contentType = resp.headers.get('content-type') || '';
-        setPdfValid(resp.ok && contentType.toLowerCase().includes('pdf'));
+        const ok = resp.ok && contentType.toLowerCase().includes('pdf');
+        setPdfValid(ok);
+
+        if (!ok) {
+          console.warn('PDF HEAD check failed', { status: resp.status, contentType });
+          // Try GET and log first bytes to help debugging (server might return HTML error page)
+          try {
+            const getResp = await fetch(pdfFileUrl, {
+              method: 'GET',
+              headers: (pdfHttpHeaders as Record<string, string>) || undefined,
+            });
+            const text = await getResp.clone().text();
+            console.warn('PDF GET response status:', getResp.status, 'first 500 chars:', text.slice(0, 500));
+          } catch (getErr) {
+            console.error('Failed to GET PDF for debugging:', getErr);
+          }
+        }
       } catch (err) {
         if (!mounted) return;
+        console.error('Error while validating PDF URL:', err);
         setPdfValid(false);
       }
     };
