@@ -603,6 +603,7 @@ export default function BookReadPage() {
     : undefined;
 
   const [pdfValid, setPdfValid] = useState<boolean | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -651,6 +652,47 @@ export default function BookReadPage() {
 
     return () => {
       mounted = false;
+    };
+  }, [viewMode, pdfFileUrl, authToken]);
+
+  // Fallback: fetch PDF as ArrayBuffer and create local blob URL for Viewer
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    const fetchPdfBlob = async () => {
+      if (viewMode !== 'pdf' || !pdfFileUrl) return;
+      try {
+        console.log('Attempting to fetch PDF as ArrayBuffer for blob fallback:', pdfFileUrl);
+        const resp = await fetch(pdfFileUrl, {
+          method: 'GET',
+          headers: (pdfHttpHeaders as Record<string, string>) || undefined,
+        });
+        if (!resp.ok) {
+          console.warn('Blob fallback fetch failed, status:', resp.status);
+          return;
+        }
+
+        const buffer = await resp.arrayBuffer();
+        if (cancelled) return;
+
+        const blob = new Blob([buffer], { type: 'application/pdf' });
+        objectUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(objectUrl);
+        console.log('Created blob URL for PDF viewer');
+      } catch (err) {
+        console.error('Failed to fetch PDF as arrayBuffer:', err);
+      }
+    };
+
+    fetchPdfBlob();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      setPdfBlobUrl(null);
     };
   }, [viewMode, pdfFileUrl, authToken]);
 
@@ -852,7 +894,7 @@ export default function BookReadPage() {
                   <Worker workerUrl={PDF_WORKER_URL}>
                     <Viewer
                       key={pdfReloadKey}
-                      fileUrl={pdfFileUrl}
+                      fileUrl={pdfBlobUrl ?? pdfFileUrl}
                       httpHeaders={pdfHttpHeaders}
                       plugins={[
                         highlightPluginInstance,
