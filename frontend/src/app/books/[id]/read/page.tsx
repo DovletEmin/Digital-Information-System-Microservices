@@ -927,7 +927,7 @@ export default function BookReadPage() {
                 console.log('Viewer URL type:', typeof viewerFileUrl, viewerFileUrl && typeof viewerFileUrl === 'string' ? viewerFileUrl.length : 'non-string-or-empty');
                 // Wrap Viewer in ErrorBoundary; if it fails, show iframe fallback
                 // Load the viewer as a client-only dynamic component to isolate errors
-                const PdfViewer = dynamic(() => import('./PdfViewerClient'), { ssr: false, loading: () => <div className="flex items-center justify-center py-12"><div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div></div> });
+                const PdfViewer = dynamic(() => import('../PdfViewerClient'), { ssr: false, loading: () => <div className="flex items-center justify-center py-12"><div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div></div> });
 
                 if (viewerError) {
                   console.warn('Viewer previously failed, using iframe fallback', viewerError);
