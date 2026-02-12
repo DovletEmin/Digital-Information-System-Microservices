@@ -888,20 +888,18 @@ export default function BookReadPage() {
                   );
                 }
                 
-                console.log('Rendering Worker and Viewer with URL:', pdfFileUrl);
+                const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
+                console.log('Rendering Worker and Viewer with URL:', viewerFileUrl);
+                console.log('Viewer URL type:', typeof viewerFileUrl, viewerFileUrl && typeof viewerFileUrl === 'string' ? viewerFileUrl.length : 'non-string-or-empty');
                 
                 return (
                   <Worker workerUrl={PDF_WORKER_URL}>
                     <Viewer
                       key={pdfReloadKey}
-                      fileUrl={pdfBlobUrl ?? pdfFileUrl}
+                      fileUrl={viewerFileUrl}
                       httpHeaders={pdfHttpHeaders}
-                      plugins={[
-                        highlightPluginInstance,
-                        pageNavigationPluginInstance,
-                        scrollModePluginInstance,
-                        zoomPluginInstance,
-                      ]}
+                      // Temporarily excluding highlightPluginInstance to isolate error
+                      plugins={[pageNavigationPluginInstance, scrollModePluginInstance, zoomPluginInstance]}
                       defaultScale={SpecialZoomLevel.PageWidth}
                       renderPage={renderPage}
                       renderLoader={() => {
