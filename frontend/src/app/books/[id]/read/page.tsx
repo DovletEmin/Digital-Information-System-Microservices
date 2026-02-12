@@ -294,33 +294,64 @@ export default function BookReadPage() {
   }, [viewMode, book]);
 
   const fetchBook = async () => {
-    if (bookId === null) return;
-    try {
-      setLoading(true);
-      const data = await bookService.getById(bookId);
-      console.log('Fetched book data:', data);
-      setBook(data);
+  if (bookId === null) return;
 
-      if (data.pdf_file_url) {
-        console.log('Setting viewMode to pdf, url:', data.pdf_file_url);
-        setViewMode('pdf');
-      } else if (data.epub_file_url) {
-        console.log('Setting viewMode to epub, url:', data.epub_file_url);
-        setViewMode('epub');
-      } else if (data.content && typeof data.content === 'string' && data.content.trim().length > 0) {
-        console.log('Setting viewMode to text, content length:', data.content.length);
-        setViewMode('text');
-        const pages = Math.max(1, Math.ceil(data.content.length / CHARS_PER_PAGE));
-        setTotalPages(pages);
-      } else {
-        console.warn('No valid content found for book');
-      }
-    } catch (error) {
-      console.error('Failed to fetch book:', error);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+
+    const data = await bookService.getById(bookId);
+    console.log('Fetched book data:', data);
+
+    setBook(data);
+
+    // --- PDF MODE ---
+    if (data?.pdf_file_url) {
+      console.log('Setting viewMode to pdf, url:', data.pdf_file_url);
+      setViewMode('pdf');
+      setTotalPages(1); // безопасный дефолт
+      return;
     }
-  };
+
+    // --- EPUB MODE ---
+    if (data?.epub_file_url) {
+      console.log('Setting viewMode to epub, url:', data.epub_file_url);
+      setViewMode('epub');
+      setTotalPages(1);
+      return;
+    }
+
+    // --- TEXT MODE ---
+    const content =
+      typeof data?.content === "string"
+        ? data.content.trim()
+        : "";
+
+    if (content.length > 0) {
+      console.log('Setting viewMode to text, content length:', content.length);
+
+      setViewMode('text');
+
+      const pages = Math.max(
+        1,
+        Math.ceil(content.length / CHARS_PER_PAGE)
+      );
+
+      setTotalPages(pages);
+      return;
+    }
+
+    // --- FALLBACK ---
+    console.warn('No valid content found for book');
+    setViewMode(null);
+    setTotalPages(1);
+
+  } catch (error) {
+    console.error('Failed to fetch book:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const loadProgress = async () => {
     if (bookId === null) return;
