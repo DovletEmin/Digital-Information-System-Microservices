@@ -409,7 +409,7 @@ export default function BookReadPage() {
     }
 
     const selection = window.getSelection();
-    if (selection && selection.toString().length > 0) {
+    if (selection?.toString()?.length > 0) {
       const text = selection.toString();
       const range = selection.getRangeAt(0);
       const contentElement = document.getElementById('book-page-content');
@@ -478,6 +478,8 @@ export default function BookReadPage() {
   };
 
   const applyHighlights = (content: string, pageStart: number, pageEnd: number) => {
+    if (typeof content !== 'string' || content.length === 0) return '';
+
     const pageHighlights = highlights.filter((h) => h.start_offset < pageEnd && h.end_offset > pageStart);
 
     if (pageHighlights.length === 0) return content;
@@ -511,7 +513,7 @@ export default function BookReadPage() {
   };
 
   const getPageContent = () => {
-    if (!book || !book.content) return '';
+    if (!book || typeof book.content !== 'string' || book.content.length === 0) return '';
 
     const start = (currentPage - 1) * CHARS_PER_PAGE;
     const end = start + CHARS_PER_PAGE;
