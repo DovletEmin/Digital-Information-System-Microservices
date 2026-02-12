@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 
 class ErrorBoundary extends React.Component<{
   children: React.ReactNode;
@@ -925,43 +926,8 @@ export default function BookReadPage() {
                 console.log('Rendering Worker and Viewer with URL:', viewerFileUrl);
                 console.log('Viewer URL type:', typeof viewerFileUrl, viewerFileUrl && typeof viewerFileUrl === 'string' ? viewerFileUrl.length : 'non-string-or-empty');
                 // Wrap Viewer in ErrorBoundary; if it fails, show iframe fallback
-                const ViewerWithBoundary = () => (
-                  <ErrorBoundary onError={(err: any) => setViewerError(err)}>
-                    <Worker workerUrl={PDF_WORKER_URL}>
-                      <Viewer
-                        key={pdfReloadKey}
-                        fileUrl={viewerFileUrl}
-                        httpHeaders={pdfHttpHeaders}
-                        plugins={[pageNavigationPluginInstance, scrollModePluginInstance, zoomPluginInstance]}
-                        defaultScale={SpecialZoomLevel.PageWidth}
-                        renderPage={renderPage}
-                        renderLoader={() => (
-                          <div className="flex items-center justify-center py-12">
-                            <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div>
-                          </div>
-                        )}
-                        renderError={(error: any) => {
-                          console.error('PDF Viewer Error:', error);
-                          return (
-                            <div className="text-red-600 text-center py-12">
-                              <p className="mb-4">Failed to load PDF file</p>
-                              <p className="text-sm mb-2 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
-                              <p className="text-xs mb-4 text-gray-500">URL: {pdfFileUrl}</p>
-                              <button onClick={() => setPdfReloadKey((prev) => prev + 1)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                Retry
-                              </button>
-                            </div>
-                          );
-                        }}
-                        onDocumentLoad={(e: DocumentLoadEvent) => {
-                          console.log('PDF Document loaded successfully:', e.doc.numPages, 'pages');
-                          handlePdfLoad(e);
-                        }}
-                        onPageChange={handlePdfPageChange}
-                      />
-                    </Worker>
-                  </ErrorBoundary>
-                );
+                // Load the viewer as a client-only dynamic component to isolate errors
+                const PdfViewer = dynamic(() => import('./PdfViewerClient'), { ssr: false, loading: () => <div className="flex items-center justify-center py-12"><div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-600 border-t-white"></div></div> });
 
                 if (viewerError) {
                   console.warn('Viewer previously failed, using iframe fallback', viewerError);
@@ -972,7 +938,37 @@ export default function BookReadPage() {
                   );
                 }
 
-                return <ViewerWithBoundary />;
+                return (
+                  <PdfViewer
+                    viewerFileUrl={viewerFileUrl}
+                    pdfHttpHeaders={pdfHttpHeaders}
+                    pdfReloadKey={pdfReloadKey}
+                    pageNavigationPluginInstance={pageNavigationPluginInstance}
+                    scrollModePluginInstance={scrollModePluginInstance}
+                    zoomPluginInstance={zoomPluginInstance}
+                    renderPage={renderPage}
+                    renderError={(error: any) => {
+                      console.error('PDF Viewer Error:', error);
+                      return (
+                        <div className="text-red-600 text-center py-12">
+                          <p className="mb-4">Failed to load PDF file</p>
+                          <p className="text-sm mb-2 text-gray-600">Error: {error?.message || 'Unknown error'}</p>
+                          <p className="text-xs mb-4 text-gray-500">URL: {pdfFileUrl}</p>
+                          <button onClick={() => setPdfReloadKey((prev) => prev + 1)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Retry
+                          </button>
+                        </div>
+                      );
+                    }}
+                    onDocumentLoad={(e: DocumentLoadEvent) => {
+                      console.log('PDF Document loaded successfully:', e.doc.numPages, 'pages');
+                      handlePdfLoad(e);
+                    }}
+                    onPageChange={handlePdfPageChange}
+                    workerUrl={PDF_WORKER_URL}
+                    defaultScale={SpecialZoomLevel.PageWidth}
+                  />
+                );
               })()}
             </div>
 
