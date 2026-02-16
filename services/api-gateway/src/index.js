@@ -34,7 +34,15 @@ if (!corsOriginsEnv || corsOriginsEnv.trim() === '*') {
 }
 
 // Middleware
-app.use(helmet());
+// Disable Helmet policies that block embedding and COOP/COEP in our internal proxy responses.
+// These headers interfere with embedding proxied media (PDF/EPUB) in iframes when frontend and
+// gateway run on different origins during local/dev testing. For stricter production security,
+// re-enable or tune these policies appropriately.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -162,6 +170,12 @@ app.use('/api/v1/books', createProxyMiddleware({
       proxyRes.headers['access-control-allow-origin'] = '*';
       proxyRes.headers['access-control-allow-methods'] = 'GET, OPTIONS';
       proxyRes.headers['access-control-allow-headers'] = 'Authorization, Content-Type';
+      // Remove any framing / CSP / COOP headers from proxied responses so frontend can embed PDFs
+      delete proxyRes.headers['content-security-policy'];
+      delete proxyRes.headers['content-security-policy-report-only'];
+      delete proxyRes.headers['x-frame-options'];
+      delete proxyRes.headers['cross-origin-opener-policy'];
+      delete proxyRes.headers['cross-origin-embedder-policy'];
       logger.info(`PDF endpoint proxied: ${req.path}, status: ${proxyRes.statusCode}, content-type: ${proxyRes.headers['content-type']}`);
     }
   }
