@@ -38,17 +38,8 @@ import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings } from 'lucide
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
-import { pageNavigationPlugin } from '@react-pdf-viewer/page-navigation';
-import { scrollModePlugin } from '@react-pdf-viewer/scroll-mode';
-import { zoomPlugin } from '@react-pdf-viewer/zoom';
-import dynamic from 'next/dynamic';
-
-// Client-only dynamic PDF viewer component
-// use explicit relative path and resolve default export to avoid invalid element type
-const PdfViewerClient = dynamic(
-  () => import('../PdfViewerClient').then((mod) => mod.default ?? mod),
-  { ssr: false }
-);
+// We no longer rely on client-side PDF viewer plugins that caused runtime errors.
+// PDFs will be displayed using a simple iframe fallback which is robust and server-proxy friendly.
 
 // Using browser-native PDF rendering via iframe/blob fallback.
 const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -96,13 +87,7 @@ export default function BookReadPage() {
 
   // removed complex PDF viewer plugin code in favor of a simpler iframe/blob approach
 
-  // PDF viewer plugins (used by client-only PdfViewerClient)
-  const pageNavigationPluginInstance = useMemo(() => pageNavigationPlugin(), []);
-  const zoomPluginInstance = useMemo(() => zoomPlugin(), []);
-  const scrollModePluginInstance = useMemo(() => scrollModePlugin(), []);
-
-  const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
-  const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
+  // We use a simple iframe for PDFs; avoid plugin state to prevent runtime errors.
 
   useEffect(() => {
     const syncToken = () => {
@@ -501,31 +486,7 @@ export default function BookReadPage() {
       }
     : undefined;
 
-  // PdfViewerClient is dynamically imported at module scope
-
-  const savePdfProgress = async (page: number, total: number) => {
-    if (!authToken || bookId === null) return;
-
-    try {
-      const progressPercentage = (page / Math.max(1, total)) * 100;
-
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          book_id: bookId,
-          current_page: page,
-          total_pages: total,
-          progress_percentage: progressPercentage,
-        }),
-      });
-    } catch (error) {
-      console.error('Failed to save PDF progress:', error);
-    }
-  };
+  // Note: PDF progress saving via viewer events removed to simplify integration.
 
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<any>(null);
@@ -660,128 +621,38 @@ export default function BookReadPage() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {viewMode === 'pdf' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            <div className="pdf-viewer">
-              {/* Quick safe fallback: render PDF via iframe to avoid third-party viewer crashes. */}
+            <div className="p-4">
               {(() => {
-                  const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
-                  if (!viewerFileUrl) {
-                    return (
-                      <div className="text-red-600 text-center py-12">
-                        <p className="mb-2">PDF url is missing</p>
-                        <p className="text-xs text-gray-500 mb-4">Book has pdf_file_url: {book?.pdf_file_url || 'no'}</p>
-                        <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                          Go back
-                        </button>
-                      </div>
-                    );
-                  }
-
+                const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
+                if (!viewerFileUrl) {
                   return (
-                    <div>
-                            <div className="p-4">
-                              {PdfViewerClient ? (
-                                <PdfViewerClient
-                                  workerUrl={PDF_WORKER_URL}
-                                  viewerFileUrl={viewerFileUrl}
-                                  pdfHttpHeaders={pdfHttpHeaders}
-                                  pdfReloadKey={pdfReloadKey}
-                                  pageNavigationPluginInstance={pageNavigationPluginInstance}
-                                  scrollModePluginInstance={scrollModePluginInstance}
-                                  zoomPluginInstance={zoomPluginInstance}
-                            
-                                  renderError={(props: any) => (
-                                    <div className="p-4 text-red-600">Ошибка отображения PDF: {props.error?.message ?? 'unknown'}</div>
-                                  )}
-                                  onDocumentLoad={(e: any) => {
-                                    try {
-                                      const total = e?.doc?.numPages ?? 0;
-                                      setPdfTotalPages(total);
-                                      setPdfCurrentPage(1);
-                                    } catch (err) {
-                                      console.warn('Failed to read PDF load event', err);
-                                    }
-                                  }}
-                                  onPageChange={(ev: any) => {
-                                    try {
-                                      const next = (ev?.currentPage ?? 0) + 1;
-                                      setPdfCurrentPage(next);
-                                      if (authToken && bookId !== null && pdfTotalPages > 0) {
-                                        savePdfProgress(next, pdfTotalPages);
-                                      }
-                                    } catch (err) {
-                                      console.warn('Failed to handle page change', err);
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <div className="text-sm text-gray-600 mb-2">Loading PDF viewer...</div>
-                              )}
-                            </div>
-
-                        <div className="border-t bg-gray-50 px-8 py-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => {
-                                  const prevIndex = Math.max(0, (pdfCurrentPage || 1) - 2);
-                                  try {
-                                    pageNavigationPluginInstance.jumpToPage(prevIndex);
-                                  } catch (err) {
-                                    console.warn('jumpToPage prev failed', err);
-                                  }
-                                }}
-                                disabled={pdfCurrentPage <= 1}
-                                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              >
-                                <ChevronLeft size={18} />
-                                <span className="hidden sm:inline">Öňki</span>
-                              </button>
-
-                              <div className="text-sm font-medium text-gray-900">{pdfCurrentPage} / {pdfTotalPages || '-'}</div>
-
-                              <button
-                                onClick={() => {
-                                  const nextIndex = Math.max(0, (pdfCurrentPage || 1));
-                                  try {
-                                    pageNavigationPluginInstance.jumpToPage(nextIndex);
-                                  } catch (err) {
-                                    console.warn('jumpToPage next failed', err);
-                                  }
-                                }}
-                                disabled={pdfTotalPages > 0 ? pdfCurrentPage >= pdfTotalPages : false}
-                                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              >
-                                <span className="hidden sm:inline">Indiki</span>
-                                <ChevronRight size={18} />
-                              </button>
-
-                              {authToken && progress && (
-                                <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
-                                  <Bookmark size={16} className="text-primary" />
-                                  <span className="hidden sm:inline">Ýatda saklandy</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
-                              <a href={viewerFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
-                            </div>
-                          </div>
-
-                          <div className="mt-4">
-                            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-primary transition-all duration-300"
-                                style={{ width: `${pdfTotalPages > 0 ? (pdfCurrentPage / pdfTotalPages) * 100 : 0}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
+                    <div className="text-red-600 text-center py-12">
+                      <p className="mb-2">PDF url is missing</p>
+                      <p className="text-xs text-gray-500 mb-4">Book has pdf_file_url: {book?.pdf_file_url || 'no'}</p>
+                      <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Go back
+                      </button>
                     </div>
                   );
-                })()}
+                }
+
+                return (
+                  <div>
+                    <iframe title="pdf-iframe" src={viewerFileUrl} style={{ width: '100%', height: '800px', border: 'none' }} />
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="border-t bg-gray-50 px-8 py-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">PDF displayed via iframe. Page navigation is not available in iframe mode.</div>
+                <div className="flex items-center gap-3">
+                  <a href={pdfBlobUrl ?? pdfFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
+                  <a href={pdfBlobUrl ?? pdfFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
+                </div>
               </div>
+            </div>
           </div>
         ) : viewMode === 'epub' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
