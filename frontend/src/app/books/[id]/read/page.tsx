@@ -46,7 +46,7 @@ import dynamic from 'next/dynamic';
 // Client-only dynamic PDF viewer component
 // use explicit relative path and resolve default export to avoid invalid element type
 const PdfViewerClient = dynamic(
-  () => import('./PdfViewerClient').then((mod) => mod.default ?? mod),
+  () => import('../PdfViewerClient').then((mod) => mod.default ?? mod),
   { ssr: false }
 );
 
