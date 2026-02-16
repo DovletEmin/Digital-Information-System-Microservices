@@ -36,11 +36,13 @@ class ErrorBoundary extends React.Component<{
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
 
 // Using browser-native PDF rendering via iframe/blob fallback.
+const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 export default function BookReadPage() {
   const params = useParams();
@@ -482,6 +484,12 @@ export default function BookReadPage() {
       }
     : undefined;
 
+  // Dynamic import of the client-only PdfViewer component
+  const PdfViewerClient = useMemo(
+    () => dynamic(() => import('../PdfViewerClient'), { ssr: false }),
+    []
+  );
+
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<any>(null);
   const [hasClientError, setHasClientError] = useState<boolean>(false);
@@ -633,28 +641,48 @@ export default function BookReadPage() {
 
                   return (
                     <div>
-                      <div className="p-4">
-                        <div className="text-sm text-gray-600 mb-2">Using safe iframe PDF viewer.</div>
-                        <iframe title="pdf-iframe" src={viewerFileUrl} style={{ width: '100%', height: '900px', border: 'none' }} />
-                      </div>
+                            <div className="p-4">
+                              {PdfViewerClient ? (
+                                <PdfViewerClient
+                                  workerUrl={PDF_WORKER_URL}
+                                  viewerFileUrl={viewerFileUrl}
+                                  pdfHttpHeaders={pdfHttpHeaders}
+                                  pdfReloadKey={pdfReloadKey}
+                            
+                                  renderError={(props: any) => (
+                                    <div className="p-4 text-red-600">Ошибка отображения PDF: {props.error?.message ?? 'unknown'}</div>
+                                  )}
+                                  onDocumentLoad={(e: any) => {
+                                    // optional: could set total pages
+                                    // console.log('PDF loaded', e);
+                                  }}
+                                  onPageChange={(ev: any) => {
+                                    // optional: ev.currentPage is zero-based
+                                    // savePdfProgress could be implemented if needed
+                                  }}
+                                />
+                              ) : (
+                                <div className="text-sm text-gray-600 mb-2">Loading PDF viewer...</div>
+                              )}
+                            </div>
 
-                      <div className="border-t bg-gray-50 px-8 py-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {authToken && progress && (
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Bookmark size={16} className="text-primary" />
-                                <span className="hidden sm:inline">Ýatda saklandy</span>
+                            <div className="border-t bg-gray-50 px-8 py-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {authToken && progress && (
+                                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                                      <Bookmark size={16} className="text-primary" />
+                                      <span className="hidden sm:inline">Ýatda saklandy</span>
+                                    </div>
+                                  )}
+                                  <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
+                                </div>
+
+                                <div>
+                                  <a href={viewerFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
+                                </div>
                               </div>
-                            )}
-                            <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
-                          </div>
-
-                          <div>
-                            <a href={viewerFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
-                          </div>
-                        </div>
-                      </div>
+                            </div>
                     </div>
                   );
                 })()}

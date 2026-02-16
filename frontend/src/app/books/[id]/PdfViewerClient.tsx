@@ -22,13 +22,14 @@ export default function PdfViewerClient(props: any) {
   }
 
   try {
+    const plugins = [pageNavigationPluginInstance, scrollModePluginInstance, zoomPluginInstance].filter(Boolean);
     return (
       <Worker workerUrl={props.workerUrl}>
         <Viewer
           key={pdfReloadKey}
           fileUrl={viewerFileUrl}
           httpHeaders={pdfHttpHeaders}
-          plugins={[pageNavigationPluginInstance, scrollModePluginInstance, zoomPluginInstance]}
+          plugins={plugins}
           defaultScale={props.defaultScale}
           renderPage={renderPage}
           renderError={renderError}
