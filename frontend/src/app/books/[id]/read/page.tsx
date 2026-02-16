@@ -39,6 +39,9 @@ import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings } from 'lucide
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
+import { pageNavigationPlugin } from '@react-pdf-viewer/page-navigation';
+import { scrollModePlugin } from '@react-pdf-viewer/scroll-mode';
+import { zoomPlugin } from '@react-pdf-viewer/zoom';
 
 // Using browser-native PDF rendering via iframe/blob fallback.
 const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -85,6 +88,14 @@ export default function BookReadPage() {
   const CHARS_PER_PAGE = 2000;
 
   // removed complex PDF viewer plugin code in favor of a simpler iframe/blob approach
+
+  // PDF viewer plugins (used by client-only PdfViewerClient)
+  const pageNavigationPluginInstance = useMemo(() => pageNavigationPlugin(), []);
+  const zoomPluginInstance = useMemo(() => zoomPlugin(), []);
+  const scrollModePluginInstance = useMemo(() => scrollModePlugin(), []);
+
+  const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
+  const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
 
   useEffect(() => {
     const syncToken = () => {
@@ -489,6 +500,30 @@ export default function BookReadPage() {
     []
   );
 
+  const savePdfProgress = async (page: number, total: number) => {
+    if (!authToken || bookId === null) return;
+
+    try {
+      const progressPercentage = (page / Math.max(1, total)) * 100;
+
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({
+          book_id: bookId,
+          current_page: page,
+          total_pages: total,
+          progress_percentage: progressPercentage,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to save PDF progress:', error);
+    }
+  };
+
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<any>(null);
   const [hasClientError, setHasClientError] = useState<boolean>(false);
@@ -652,12 +687,24 @@ export default function BookReadPage() {
                                     <div className="p-4 text-red-600">Ошибка отображения PDF: {props.error?.message ?? 'unknown'}</div>
                                   )}
                                   onDocumentLoad={(e: any) => {
-                                    // optional: could set total pages
-                                    // console.log('PDF loaded', e);
+                                    try {
+                                      const total = e?.doc?.numPages ?? 0;
+                                      setPdfTotalPages(total);
+                                      setPdfCurrentPage(1);
+                                    } catch (err) {
+                                      console.warn('Failed to read PDF load event', err);
+                                    }
                                   }}
                                   onPageChange={(ev: any) => {
-                                    // optional: ev.currentPage is zero-based
-                                    // savePdfProgress could be implemented if needed
+                                    try {
+                                      const next = (ev?.currentPage ?? 0) + 1;
+                                      setPdfCurrentPage(next);
+                                      if (authToken && bookId !== null && pdfTotalPages > 0) {
+                                        savePdfProgress(next, pdfTotalPages);
+                                      }
+                                    } catch (err) {
+                                      console.warn('Failed to handle page change', err);
+                                    }
                                   }}
                                 />
                               ) : (
@@ -665,23 +712,66 @@ export default function BookReadPage() {
                               )}
                             </div>
 
-                            <div className="border-t bg-gray-50 px-8 py-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  {authToken && progress && (
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                      <Bookmark size={16} className="text-primary" />
-                                      <span className="hidden sm:inline">Ýatda saklandy</span>
-                                    </div>
-                                  )}
-                                  <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
-                                </div>
+                        <div className="border-t bg-gray-50 px-8 py-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => {
+                                  const prevIndex = Math.max(0, (pdfCurrentPage || 1) - 2);
+                                  try {
+                                    pageNavigationPluginInstance.jumpToPage(prevIndex);
+                                  } catch (err) {
+                                    console.warn('jumpToPage prev failed', err);
+                                  }
+                                }}
+                                disabled={pdfCurrentPage <= 1}
+                                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <ChevronLeft size={18} />
+                                <span className="hidden sm:inline">Öňki</span>
+                              </button>
 
-                                <div>
-                                  <a href={viewerFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
+                              <div className="text-sm font-medium text-gray-900">{pdfCurrentPage} / {pdfTotalPages || '-'}</div>
+
+                              <button
+                                onClick={() => {
+                                  const nextIndex = Math.max(0, (pdfCurrentPage || 1));
+                                  try {
+                                    pageNavigationPluginInstance.jumpToPage(nextIndex);
+                                  } catch (err) {
+                                    console.warn('jumpToPage next failed', err);
+                                  }
+                                }}
+                                disabled={pdfTotalPages > 0 ? pdfCurrentPage >= pdfTotalPages : false}
+                                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <span className="hidden sm:inline">Indiki</span>
+                                <ChevronRight size={18} />
+                              </button>
+
+                              {authToken && progress && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
+                                  <Bookmark size={16} className="text-primary" />
+                                  <span className="hidden sm:inline">Ýatda saklandy</span>
                                 </div>
-                              </div>
+                              )}
                             </div>
+
+                            <div className="flex items-center gap-3">
+                              <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
+                              <a href={viewerFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary transition-all duration-300"
+                                style={{ width: `${pdfTotalPages > 0 ? (pdfCurrentPage / pdfTotalPages) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
                     </div>
                   );
                 })()}
