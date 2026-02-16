@@ -44,7 +44,11 @@ import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import dynamic from 'next/dynamic';
 
 // Client-only dynamic PDF viewer component
-const PdfViewerClient = dynamic(() => import('../PdfViewerClient'), { ssr: false });
+// use explicit relative path and resolve default export to avoid invalid element type
+const PdfViewerClient = dynamic(
+  () => import('./PdfViewerClient').then((mod) => mod.default ?? mod),
+  { ssr: false }
+);
 
 // Using browser-native PDF rendering via iframe/blob fallback.
 const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
