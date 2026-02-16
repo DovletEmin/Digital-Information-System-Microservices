@@ -10,6 +10,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const axios = require('axios');
 
 const corsOriginsEnv = process.env.CORS_ORIGINS || '*';
 let corsOptions;
@@ -108,6 +109,73 @@ app.use('/api/v1/users', createProxyMiddleware({
 
 // Content Service Routes - прямой проксинг без изменения пути
 // /api/v1/articles, /api/v1/books, /api/v1/dissertations
+// Special-case streaming endpoints for books (read/download) so we can
+// control response headers (CSP / X-Frame-Options) and safely allow
+// embedding via iframe from the frontend during development.
+app.get('/api/v1/books/:bookId/read', async (req, res) => {
+  try {
+    const targetUrl = `${services.content}${req.originalUrl}`;
+    logger.info(`Streaming READ from ${targetUrl}`);
+    const upstream = await axios.get(targetUrl, {
+      responseType: 'stream',
+      headers: {
+        Authorization: req.headers.authorization || undefined,
+      },
+      timeout: 60000,
+    });
+
+    // Copy content-type and content-disposition if present
+    if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
+    if (upstream.headers['content-disposition']) res.setHeader('Content-Disposition', upstream.headers['content-disposition']);
+
+    // Allow framing by the requesting origin only
+    const origin = req.headers.origin || req.headers.referer || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+    // Remove or override potentially dangerous headers
+    res.removeHeader('Content-Security-Policy');
+    res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${origin}`);
+    res.setHeader('X-Frame-Options', 'ALLOW-FROM ' + (origin === '*' ? ' ' : origin));
+
+    upstream.data.pipe(res);
+  } catch (err) {
+    logger.error('Failed to stream read:', err.message || err);
+    res.status(502).json({ error: 'Failed to fetch book content' });
+  }
+});
+
+app.get('/api/v1/books/:bookId/download', async (req, res) => {
+  try {
+    const targetUrl = `${services.content}${req.originalUrl}`;
+    logger.info(`Streaming DOWNLOAD from ${targetUrl}`);
+    const upstream = await axios.get(targetUrl, {
+      responseType: 'stream',
+      headers: {
+        Authorization: req.headers.authorization || undefined,
+      },
+      timeout: 60000,
+    });
+
+    if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
+    if (upstream.headers['content-disposition']) res.setHeader('Content-Disposition', upstream.headers['content-disposition']);
+
+    const origin = req.headers.origin || req.headers.referer || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+    res.removeHeader('Content-Security-Policy');
+    res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${origin}`);
+    res.setHeader('X-Frame-Options', 'ALLOW-FROM ' + (origin === '*' ? ' ' : origin));
+
+    upstream.data.pipe(res);
+  } catch (err) {
+    logger.error('Failed to stream download:', err.message || err);
+    res.status(502).json({ error: 'Failed to fetch book content' });
+  }
+});
 app.use('/api/v1/articles', createProxyMiddleware({
   target: services.content,
   changeOrigin: true,
