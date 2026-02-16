@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import React from 'react';
-import dynamic from 'next/dynamic';
 
 class ErrorBoundary extends React.Component<{
   children: React.ReactNode;
@@ -42,6 +41,10 @@ import { Book } from '@/types';
 import { pageNavigationPlugin } from '@react-pdf-viewer/page-navigation';
 import { scrollModePlugin } from '@react-pdf-viewer/scroll-mode';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
+import dynamic from 'next/dynamic';
+
+// Client-only dynamic PDF viewer component
+const PdfViewerClient = dynamic(() => import('../PdfViewerClient'), { ssr: false });
 
 // Using browser-native PDF rendering via iframe/blob fallback.
 const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -494,11 +497,7 @@ export default function BookReadPage() {
       }
     : undefined;
 
-  // Dynamic import of the client-only PdfViewer component
-  const PdfViewerClient = useMemo(
-    () => dynamic(() => import('../PdfViewerClient'), { ssr: false }),
-    []
-  );
+  // PdfViewerClient is dynamically imported at module scope
 
   const savePdfProgress = async (page: number, total: number) => {
     if (!authToken || bookId === null) return;
@@ -682,6 +681,9 @@ export default function BookReadPage() {
                                   viewerFileUrl={viewerFileUrl}
                                   pdfHttpHeaders={pdfHttpHeaders}
                                   pdfReloadKey={pdfReloadKey}
+                                  pageNavigationPluginInstance={pageNavigationPluginInstance}
+                                  scrollModePluginInstance={scrollModePluginInstance}
+                                  zoomPluginInstance={zoomPluginInstance}
                             
                                   renderError={(props: any) => (
                                     <div className="p-4 text-red-600">Ошибка отображения PDF: {props.error?.message ?? 'unknown'}</div>
