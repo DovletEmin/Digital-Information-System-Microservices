@@ -171,11 +171,25 @@ app.use('/api/v1/books', createProxyMiddleware({
       proxyRes.headers['access-control-allow-methods'] = 'GET, OPTIONS';
       proxyRes.headers['access-control-allow-headers'] = 'Authorization, Content-Type';
       // Remove any framing / CSP / COOP headers from proxied responses so frontend can embed PDFs
-      delete proxyRes.headers['content-security-policy'];
       delete proxyRes.headers['content-security-policy-report-only'];
-      delete proxyRes.headers['x-frame-options'];
       delete proxyRes.headers['cross-origin-opener-policy'];
       delete proxyRes.headers['cross-origin-embedder-policy'];
+      // Allow framing by the requesting origin (development only). Prefer explicit origin over wildcard.
+      const origin = req.headers.origin || req.headers.referer || '';
+      if (origin) {
+        try {
+          // Only allow the exact origin value to avoid open framing.
+          const allowedOrigin = new URL(origin).origin || origin;
+          proxyRes.headers['content-security-policy'] = `frame-ancestors 'self' ${allowedOrigin}`;
+          proxyRes.headers['x-frame-options'] = 'ALLOW-FROM ' + allowedOrigin;
+        } catch (e) {
+          proxyRes.headers['content-security-policy'] = `frame-ancestors 'self'`;
+          proxyRes.headers['x-frame-options'] = 'ALLOWALL';
+        }
+      } else {
+        proxyRes.headers['content-security-policy'] = `frame-ancestors 'self'`;
+        proxyRes.headers['x-frame-options'] = 'ALLOWALL';
+      }
       logger.info(`PDF endpoint proxied: ${req.path}, status: ${proxyRes.statusCode}, content-type: ${proxyRes.headers['content-type']}`);
     }
   }
