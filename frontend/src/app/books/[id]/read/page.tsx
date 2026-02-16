@@ -448,9 +448,10 @@ export default function BookReadPage() {
   // Prefer direct media URL when available (helps avoid proxy/auth issues)
   const pdfFileUrl = (() => {
     if (!book?.pdf_file_url) return '';
-    // If book.pdf_file_url is an absolute URL, use it directly
-    if (/^https?:\/\//i.test(book.pdf_file_url)) return book.pdf_file_url;
+    // Prefer serving through our API gateway/proxy to avoid CORS and auth issues
     if (bookId !== null && apiBaseUrl) return `${apiBaseUrl}/api/v1/books/${bookId}/read`;
+    // Fallback to absolute URL only if proxy is not available
+    if (/^https?:\/\//i.test(book.pdf_file_url)) return book.pdf_file_url;
     return '';
   })();
   
