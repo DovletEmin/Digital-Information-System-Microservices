@@ -482,49 +482,10 @@ export default function BookReadPage() {
       }
     : undefined;
 
-  const [pdfValid, setPdfValid] = useState<boolean | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<any>(null);
   const [hasClientError, setHasClientError] = useState<boolean>(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const validatePdf = async () => {
-      if (viewMode !== 'pdf' || !pdfFileUrl) {
-        if (mounted) setPdfValid(null);
-        return;
-      }
-
-      try {
-        console.log('Validating PDF URL via HEAD:', pdfFileUrl);
-        const resp = await fetch(pdfFileUrl, {
-          method: 'HEAD',
-          headers: (pdfHttpHeaders as Record<string, string>) || undefined,
-        });
-
-        if (!mounted) return;
-
-        const contentType = resp.headers.get('content-type') || '';
-        const ok = resp.ok && contentType.toLowerCase().includes('pdf');
-        setPdfValid(ok);
-
-        if (!ok) {
-          console.warn('PDF HEAD check failed', { status: resp.status, contentType });
-        }
-      } catch (err) {
-        if (!mounted) return;
-        console.error('Error while validating PDF URL:', err);
-        setPdfValid(false);
-      }
-    };
-
-    validatePdf();
-
-    return () => {
-      mounted = false;
-    };
-  }, [viewMode, pdfFileUrl, authToken]);
+  // Removed HEAD validation to avoid servers that reject HEAD and CORS issues.
 
   // Global client error handlers: if a runtime error occurs anywhere, switch to a safe iframe fallback
   useEffect(() => {
@@ -546,46 +507,8 @@ export default function BookReadPage() {
     };
   }, []);
 
-  // Fallback: fetch PDF as ArrayBuffer and create local blob URL for Viewer
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    const fetchPdfBlob = async () => {
-      if (viewMode !== 'pdf' || !pdfFileUrl) return;
-      try {
-        console.log('Attempting to fetch PDF as ArrayBuffer for blob fallback:', pdfFileUrl);
-        const resp = await fetch(pdfFileUrl, {
-          method: 'GET',
-          headers: (pdfHttpHeaders as Record<string, string>) || undefined,
-        });
-        if (!resp.ok) {
-          console.warn('Blob fallback fetch failed, status:', resp.status);
-          return;
-        }
-
-        const buffer = await resp.arrayBuffer();
-        if (cancelled) return;
-
-        const blob = new Blob([buffer], { type: 'application/pdf' });
-        objectUrl = URL.createObjectURL(blob);
-        setPdfBlobUrl(objectUrl);
-        console.log('Created blob URL for PDF viewer');
-      } catch (err) {
-        console.error('Failed to fetch PDF as arrayBuffer:', err);
-      }
-    };
-
-    fetchPdfBlob();
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      setPdfBlobUrl(null);
-    };
-  }, [viewMode, pdfFileUrl, authToken]);
+  // Note: blob fallback removed to avoid triggering CORS preflight / HEAD issues.
+  // The iframe will load the proxied `/api/v1/books/{id}/read` URL directly.
 
   if (loading) {
     return (
@@ -725,7 +648,6 @@ export default function BookReadPage() {
                               </div>
                             )}
                             <a href={viewerFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
-                            {pdfValid === false && <span className="text-sm text-red-600 ml-4">PDF validation failed - server may return HTML</span>}
                           </div>
 
                           <div>
