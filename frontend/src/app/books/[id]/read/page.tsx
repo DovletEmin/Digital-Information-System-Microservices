@@ -36,7 +36,6 @@ class ErrorBoundary extends React.Component<{
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { bookService } from '@/services/bookService';
 import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
