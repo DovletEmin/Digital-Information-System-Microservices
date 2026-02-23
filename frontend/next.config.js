@@ -6,17 +6,13 @@ const nextConfig = {
     unoptimized: true
   },
   webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        canvas: false,
-      };
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        canvas: false,
-      };
-    }
-    return config;
+    // Ensure any attempts to require native `canvas` are ignored by webpack
+    // This prevents pdfjs-dist from trying to pull in the native canvas package
+    config.resolve = config.resolve || {}
+    config.resolve.fallback = Object.assign({}, config.resolve.fallback, {
+      canvas: false,
+    })
+    return config
   },
 }
 

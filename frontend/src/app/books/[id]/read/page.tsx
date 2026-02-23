@@ -1,47 +1,12 @@
-﻿"use client";
+"use client";
 
 import React from 'react';
-
-class ErrorBoundary extends React.Component<{
-  children: React.ReactNode;
-  onError?: (error: any) => void;
-}> {
-  state = { hasError: false, error: null as any };
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: any, info: any) {
-    console.error('ErrorBoundary caught error:', error, info);
-    this.setState({ error });
-    if (this.props.onError) {
-      try {
-        this.props.onError(error);
-      } catch (e) {
-        console.error('ErrorBoundary onError handler threw:', e);
-      }
-    }
-  }
-
-  render() {
-    if ((this.state as any).hasError) {
-      return null;
-    }
-    return this.props.children as React.ReactElement;
-  }
-}
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { bookService } from '@/services/bookService';
-import { savedService, BookHighlight } from '@/services/savedService';
 import { Book } from '@/types';
-// We no longer rely on client-side PDF viewer plugins that caused runtime errors.
-// PDFs will be displayed using a simple iframe fallback which is robust and server-proxy friendly.
 
-// Using browser-native PDF rendering via iframe/blob fallback.
 const PDF_WORKER_URL = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 export default function BookReadPage() {
@@ -51,471 +16,242 @@ export default function BookReadPage() {
   const parsedId = Number(paramId);
   const bookId = Number.isFinite(parsedId) ? parsedId : null;
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Book Read Page - params:', params);
-    console.log('Book Read Page - bookId:', bookId);
-  }, [params, bookId]);
-
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'text' | 'pdf' | 'epub'>('text');
+  const [viewMode, setViewMode] = useState<'pdf' | 'epub' | null>('pdf');
 
-  // Text reading state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [fontSize, setFontSize] = useState(18);
-  const [showSettings, setShowSettings] = useState(false);
-  const [highlights, setHighlights] = useState<BookHighlight[]>([]);
-  const [currentHighlight, setCurrentHighlight] = useState<{ start: number; end: number; text: string } | null>(null);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [selectedHighlightIds, setSelectedHighlightIds] = useState<number[]>([]);
+  // settings UI removed per design — PDF always opens at fixed scale
 
-  // PDF reading state (simplified)
-  const [pdfReloadKey, setPdfReloadKey] = useState(0);
-
-  // EPUB reading state
-  const [epubBook, setEpubBook] = useState<any>(null);
-  const [epubRendition, setEpubRendition] = useState<any>(null);
-  const [epubError, setEpubError] = useState<string | null>(null);
-  const epubViewerRef = useRef<HTMLDivElement>(null);
-
+  // auth / progress
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
 
-  const CHARS_PER_PAGE = 2000;
+  // epub
+  const [epubError, setEpubError] = useState<string | null>(null);
+  const epubViewerRef = useRef<HTMLDivElement | null>(null);
+  const [epubRendition, setEpubRendition] = useState<any>(null);
 
-  // removed complex PDF viewer plugin code in favor of a simpler iframe/blob approach
+  // pdf state
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [effectivePdfUrl, setEffectivePdfUrl] = useState<string | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<any | null>(null);
+  const [totalPdfPages, setTotalPdfPages] = useState<number>(0);
+  const [currentPdfPage, setCurrentPdfPage] = useState<number>(1);
+  const [pdfScale, setPdfScale] = useState<number>(3.0);
+  const [pdfLoadingProgress, setPdfLoadingProgress] = useState<number>(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [showProgressSlider, setShowProgressSlider] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPage, setDragPage] = useState<number | null>(null);
 
-  // We use a simple iframe for PDFs; avoid plugin state to prevent runtime errors.
+  const pdfReadingPercent = totalPdfPages && totalPdfPages > 0 ? Math.round((currentPdfPage / totalPdfPages) * 100) : pdfLoadingProgress;
 
+  // Thumb sizing (22px visual + 4px border each side = 30px outer). Use half-thumb padding so thumb centers at track ends.
+  const THUMB_OUTER_PX = 30;
+  const THUMB_HALF_PX = THUMB_OUTER_PX / 2;
+
+  // Map pages to 0..100 range so page 1 -> 0% and last page -> 100%.
+  const fillPercent = useMemo(() => {
+    if (!totalPdfPages || totalPdfPages <= 1) return pdfReadingPercent;
+    const pageForCalc = dragPage !== null ? dragPage : currentPdfPage;
+    const pct = ((pageForCalc - 1) / (totalPdfPages - 1)) * 100;
+    return Math.max(0, Math.min(100, Number(pct.toFixed(2))));
+  }, [currentPdfPage, totalPdfPages, pdfReadingPercent, dragPage]);
+
+  // computed urls
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+  const proxyPdfUrl = book && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  const absolutePdfUrl = book?.pdf_file_url && /^https?:\/\//i.test(book.pdf_file_url) ? book.pdf_file_url : '';
+
+  // keep auth token in sync with localStorage
   useEffect(() => {
-    const syncToken = () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      setAuthToken(token);
-    };
-
+    const syncToken = () => setAuthToken(typeof window !== 'undefined' ? localStorage.getItem('access_token') : null);
     syncToken();
-
-    const handleAuthChange = () => syncToken();
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'access_token' || event.key === 'refresh_token') {
-        syncToken();
-      }
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === 'access_token' || ev.key === 'refresh_token') syncToken();
     };
-
-    window.addEventListener('auth-change', handleAuthChange);
-    window.addEventListener('storage', handleStorage);
-
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('auth-change', syncToken as EventListener);
     return () => {
-      window.removeEventListener('auth-change', handleAuthChange);
-      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('auth-change', syncToken as EventListener);
     };
   }, []);
 
+  // fetch book
   useEffect(() => {
     if (bookId === null) return;
-    fetchBook();
-  }, [bookId]);
-
-  useEffect(() => {
-    if (authToken && bookId !== null) {
-      loadProgress();
-      loadHighlights();
-    }
-  }, [authToken, bookId]);
-
-  useEffect(() => {
-    if (viewMode === 'epub' && book?.epub_file_url && epubViewerRef.current) {
-      loadEpubBook();
-    }
-
-    return () => {
-      if (epubRendition) {
-        epubRendition.destroy();
+    const f = async () => {
+      setLoading(true);
+      try {
+        const data = await bookService.getById(bookId);
+        setBook(data);
+        if (data?.pdf_file_url) {
+          setViewMode('pdf');
+        } else if (data?.epub_file_url) {
+          setViewMode('epub');
+        } else {
+          setViewMode(null);
+        }
+      } catch (e) {
+        console.error('Failed to fetch book', e);
+      } finally {
+        setLoading(false);
       }
     };
-  }, [viewMode, book]);
+    f();
+  }, [bookId]);
 
-  const fetchBook = async () => {
-  if (bookId === null) return;
-
-  try {
-    setLoading(true);
-
-    const data = await bookService.getById(bookId);
-    console.log('Fetched book data:', data);
-
-    setBook(data);
-
-    // --- PDF MODE ---
-    if (data?.pdf_file_url) {
-      console.log('Setting viewMode to pdf, url:', data.pdf_file_url);
-      setViewMode('pdf');
-      setTotalPages(1); // безопасный дефолт
-      return;
-    }
-
-    // --- EPUB MODE ---
-    if (data?.epub_file_url) {
-      console.log('Setting viewMode to epub, url:', data.epub_file_url);
-      setViewMode('epub');
-      setTotalPages(1);
-      return;
-    }
-
-    // --- TEXT MODE ---
-    const content =
-      typeof data?.content === "string"
-        ? data.content.trim()
-        : "";
-
-    if (content.length > 0) {
-      console.log('Setting viewMode to text, content length:', content.length);
-
-      setViewMode('text');
-
-      const pages = Math.max(
-        1,
-        Math.ceil(content.length / CHARS_PER_PAGE)
-      );
-
-      setTotalPages(pages);
-      return;
-    }
-
-    // --- FALLBACK ---
-    console.warn('No valid content found for book');
-    setViewMode(null);
-    setTotalPages(1);
-
-  } catch (error) {
-    console.error('Failed to fetch book:', error);
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  const loadProgress = async () => {
-    if (bookId === null) return;
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setProgress(data);
-        if (data.current_page) {
-          setCurrentPage(data.current_page);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load progress:', error);
-    }
-  };
-
-  const saveProgress = async (page: number) => {
+  // load saved progress
+  useEffect(() => {
     if (!authToken || bookId === null) return;
+    const f = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          setProgress(d);
+          if (d.current_page) {
+            setCurrentPdfPage(d.current_page);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load progress', e);
+      }
+    };
+    f();
+  }, [authToken, bookId]);
 
+  const saveProgress = useCallback(async (page: number, total?: number) => {
+    if (!authToken || bookId === null) return;
     try {
-      const progressPercentage = (page / totalPages) * 100;
-
+      const finalTotal = total ?? totalPdfPages;
+      const progressPercentage = finalTotal && finalTotal > 0 ? (page / finalTotal) * 100 : 0;
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
-        body: JSON.stringify({
-          book_id: bookId,
-          current_page: page,
-          total_pages: totalPages,
-          progress_percentage: progressPercentage,
-        }),
+        body: JSON.stringify({ book_id: bookId, current_page: page, total_pages: finalTotal, progress_percentage: progressPercentage }),
       });
-    } catch (error) {
-      console.error('Failed to save progress:', error);
+    } catch (e) {
+      console.error('Failed to save progress', e);
     }
-  };
+  }, [authToken, bookId, totalPdfPages]);
 
-  const loadHighlights = async () => {
-    if (bookId === null) return;
-    try {
-      const data = await savedService.getBookHighlights(bookId);
-      setHighlights(data);
-    } catch (error) {
-      console.error('Failed to load highlights:', error);
-    }
-  };
+  // proxy check -> effectivePdfUrl
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const run = async () => {
+      setEffectivePdfUrl(null);
+      if (!book) return;
+      if (!proxyPdfUrl) return setEffectivePdfUrl(absolutePdfUrl || null);
+      try {
+        const t = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(proxyPdfUrl, { method: 'GET', headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined, signal: controller.signal });
+        clearTimeout(t);
+        const ct = res.headers.get('content-type') || '';
+        if (res.ok && ct.toLowerCase().includes('pdf')) {
+          if (!cancelled) setEffectivePdfUrl(proxyPdfUrl);
+          return;
+        }
+        if (!cancelled) setEffectivePdfUrl(absolutePdfUrl || null);
+      } catch (e) {
+        if (!cancelled) setEffectivePdfUrl(absolutePdfUrl || null);
+      }
+    };
+    run();
+    return () => { cancelled = true; controller.abort(); };
+  }, [book, proxyPdfUrl, absolutePdfUrl, authToken]);
 
-  const loadEpubBook = async () => {
+  // load pdf (pdfjs)
+  useEffect(() => {
+    let cancelled = false;
+    let loadingTask: any = null;
+    const load = async () => {
+      if (typeof window === 'undefined') return;
+      const url = pdfBlobUrl ?? effectivePdfUrl ?? absolutePdfUrl;
+      if (!url) return;
+      try {
+        setPdfLoadingProgress(0);
+        setPdfDoc(null);
+        setTotalPdfPages(0);
+        const pdfjsModule: any = await import('pdfjs-dist/legacy/build/pdf');
+        const pdfjs = (pdfjsModule && (pdfjsModule.default || pdfjsModule)) as any;
+        if (pdfjs && pdfjs.GlobalWorkerOptions) pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+        loadingTask = pdfjs.getDocument({ url, withCredentials: false });
+        loadingTask.onProgress = (d: any) => { try { const p = d.total ? Math.round((d.loaded / d.total) * 100) : 0; setPdfLoadingProgress(p); } catch (e) {} };
+        const doc = await loadingTask.promise;
+        if (cancelled) return;
+        setPdfDoc(doc);
+        setTotalPdfPages(doc.numPages || 0);
+        setPdfLoadingProgress(100);
+      } catch (e) {
+        console.error('PDF load failed', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; try { loadingTask?.destroy && loadingTask.destroy(); } catch (e) {} };
+  }, [effectivePdfUrl, absolutePdfUrl, pdfBlobUrl, authToken]);
+
+  // render page
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current) return;
+    let cancelled = false;
+    const render = async () => {
+      try {
+        const page = await pdfDoc.getPage(currentPdfPage);
+        const viewport = page.getViewport({ scale: pdfScale });
+        const canvas = canvasRef.current!;
+        const ctx = canvas.getContext('2d');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      } catch (e) {
+        console.error('Render error', e);
+      }
+    };
+    render();
+    return () => { cancelled = true; };
+  }, [pdfDoc, currentPdfPage, pdfScale]);
+
+  // page bounds
+  useEffect(() => {
+    if (totalPdfPages && currentPdfPage > totalPdfPages) setCurrentPdfPage(totalPdfPages);
+    if (currentPdfPage < 1) setCurrentPdfPage(1);
+  }, [currentPdfPage, totalPdfPages]);
+
+  // autosave debounce
+  useEffect(() => {
+    if (!(viewMode === 'pdf' && authToken && bookId !== null && totalPdfPages > 0)) return;
+    const t = setTimeout(() => saveProgress(currentPdfPage, totalPdfPages), 800);
+    return () => clearTimeout(t);
+  }, [currentPdfPage, totalPdfPages, viewMode, authToken, saveProgress, bookId]);
+
+  // EPUB loader (minimal)
+  const loadEpubBook = useCallback(async () => {
     if (typeof window === 'undefined' || !book?.epub_file_url) return;
-
     try {
       setEpubError(null);
       const ePub = (await import('epubjs')).default;
       const bookInstance = ePub(book.epub_file_url);
-      setEpubBook(bookInstance);
-
       if (epubViewerRef.current) {
         epubViewerRef.current.innerHTML = '';
-
-        const rendition = bookInstance.renderTo(epubViewerRef.current, {
-          width: '100%',
-          height: '100%',
-          spread: 'none',
-        });
-
+        const rendition = bookInstance.renderTo(epubViewerRef.current, { width: '100%', height: '100%', spread: 'none' });
         await rendition.display();
         setEpubRendition(rendition);
-
-        bookInstance.ready
-          .then(() => bookInstance.locations.generate(1600))
-          .then((locations: any) => {
-            setTotalPages(locations.length);
-          });
       }
-    } catch (error) {
-      console.error('Failed to load EPUB:', error);
-      setEpubError('EPUB faÃ½ly Ã½Ã¼klenip bilinmedi');
+    } catch (e) {
+      console.error('Failed to load EPUB', e);
+      setEpubError('Failed to load EPUB');
     }
-  };
+  }, [book]);
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    setCurrentPage(newPage);
-    saveProgress(newPage);
-
-    if (viewMode === 'epub' && epubRendition && epubBook) {
-      epubRendition.display(epubBook.locations.cfiFromLocation(newPage - 1));
-    }
-  };
-
-  const getTextOffset = (root: Node, target: Node, offset: number): number => {
-    let textOffset = 0;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-
-    let currentNode = walker.nextNode();
-    while (currentNode) {
-      if (currentNode === target) {
-        return textOffset + offset;
-      }
-      textOffset += currentNode.textContent?.length || 0;
-      currentNode = walker.nextNode();
-    }
-
-    return textOffset;
-  };
-
-  const handleTextSelection = () => {
-    if (!authToken) {
-      window.getSelection()?.removeAllRanges();
-      return;
-    }
-
-    const selection = window.getSelection();
-    if (selection?.toString()?.length > 0) {
-      const text = selection.toString();
-      const range = selection.getRangeAt(0);
-      const contentElement = document.getElementById('book-page-content');
-
-      if (contentElement && contentElement.contains(range.commonAncestorContainer)) {
-        const pageOffset = (currentPage - 1) * CHARS_PER_PAGE;
-        const startOffset = pageOffset + getTextOffset(contentElement, range.startContainer, range.startOffset);
-        const endOffset = startOffset + text.length;
-
-        const overlappingHighlights = highlights.filter(
-          (highlight) => highlight.start_offset < endOffset && highlight.end_offset > startOffset
-        );
-
-        setCurrentHighlight({ start: startOffset, end: endOffset, text });
-        setSelectedHighlightIds(overlappingHighlights.map((highlight) => highlight.id));
-        setShowColorPicker(true);
-      }
-    }
-  };
-
-  const handleHighlight = async (color: string) => {
-    if (!currentHighlight) return;
-    if (bookId === null) return;
-
-    try {
-      if (selectedHighlightIds.length > 0) {
-        await Promise.all(selectedHighlightIds.map((id) => savedService.updateBookHighlight(id, { color })));
-      } else {
-        await savedService.createBookHighlight({
-          book_id: bookId,
-          text: currentHighlight.text,
-          start_offset: currentHighlight.start,
-          end_offset: currentHighlight.end,
-          color,
-        });
-      }
-
-      await loadHighlights();
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
-    } catch (error) {
-      console.error('Failed to create highlight:', error);
-    }
-  };
-
-  const handleClearHighlight = async () => {
-    if (selectedHighlightIds.length === 0) {
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
-      return;
-    }
-    try {
-      await Promise.all(selectedHighlightIds.map((id) => savedService.deleteBookHighlight(id)));
-      await loadHighlights();
-      setShowColorPicker(false);
-      setCurrentHighlight(null);
-      setSelectedHighlightIds([]);
-      window.getSelection()?.removeAllRanges();
-    } catch (error) {
-      console.error('Failed to delete highlight:', error);
-    }
-  };
-
-  const applyHighlights = (content: string, pageStart: number, pageEnd: number) => {
-    if (typeof content !== 'string' || content.length === 0) return '';
-
-    const pageHighlights = highlights.filter((h) => h.start_offset < pageEnd && h.end_offset > pageStart);
-
-    if (pageHighlights.length === 0) return content;
-
-    const sortedHighlights = [...pageHighlights].sort((a, b) => a.start_offset - b.start_offset);
-    let result = '';
-    let lastIndex = 0;
-
-    sortedHighlights.forEach((highlight) => {
-      const localStart = Math.max(0, highlight.start_offset - pageStart);
-      const localEnd = Math.min(content.length, highlight.end_offset - pageStart);
-
-      if (localStart < lastIndex || localStart >= content.length) return;
-
-      result += content.slice(lastIndex, localStart);
-
-      const colorClass =
-        {
-          yellow: 'bg-yellow-200',
-          green: 'bg-green-200',
-          blue: 'bg-blue-200',
-          red: 'bg-red-200',
-        }[highlight.color] || 'bg-yellow-200';
-
-      result += `<mark class="${colorClass} px-0.5 rounded">${content.slice(localStart, localEnd)}</mark>`;
-      lastIndex = localEnd;
-    });
-
-    result += content.slice(lastIndex);
-    return result;
-  };
-
-  const getPageContent = () => {
-  // Гарантируем, что content — строка
-  const content = typeof book?.content === "string" ? book.content : "";
-
-  // Если пусто — возвращаем пустую строку
-  if (content.length === 0) return "";
-
-  // Защищаем currentPage
-  const safePage = Math.max(1, currentPage || 1);
-
-  const start = (safePage - 1) * CHARS_PER_PAGE;
-  const end = start + CHARS_PER_PAGE;
-
-  const pageContent = content.slice(start, end);
-
-  // Если applyHighlights не определена — просто возвращаем текст
-  return applyHighlights ? applyHighlights(pageContent, start, end) : pageContent;
-};
-
-
-
-  const handlePdfLoad = (event: any) => {
-    // legacy placeholder (no-op for iframe mode)
-    return;
-  };
-  // PDF navigation/progress via embedded viewer is not available in iframe mode
-
-  // Calculate PDF URL
-  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  // Prefer direct media URL when available (helps avoid proxy/auth issues)
-  const pdfFileUrl = (() => {
-    if (!book?.pdf_file_url) return '';
-    // Prefer serving through our API gateway/proxy to avoid CORS and auth issues
-    if (bookId !== null && apiBaseUrl) return `${apiBaseUrl}/api/v1/books/${bookId}/read`;
-    // Fallback to absolute URL only if proxy is not available
-    if (/^https?:\/\//i.test(book.pdf_file_url)) return book.pdf_file_url;
-    return '';
-  })();
-  
-  // Debug logging for PDF URL
-  useEffect(() => {
-    if (book && viewMode === 'pdf') {
-      const calculatedUrl = apiBaseUrl && bookId ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
-      console.log('PDF Config:', {
-        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-        apiBaseUrl,
-        bookId,
-        pdf_file_url: book.pdf_file_url,
-        calculatedPdfUrl: calculatedUrl,
-        authToken: authToken ? 'present' : 'missing'
-      });
-      
-      if (!apiBaseUrl) {
-        console.error('CRITICAL: NEXT_PUBLIC_API_URL is not set!');
-      }
-      if (!calculatedUrl) {
-        console.error('CRITICAL: pdfFileUrl is empty!');
-      }
-    }
-  }, [book, viewMode, bookId, authToken]);
-  const pdfHttpHeaders = authToken
-    ? {
-        Authorization: `Bearer ${authToken}`,
-      }
-    : undefined;
-
-  // Note: PDF progress saving via viewer events removed to simplify integration.
-
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [viewerError, setViewerError] = useState<any>(null);
-  const [hasClientError, setHasClientError] = useState<boolean>(false);
-  // Removed HEAD validation to avoid servers that reject HEAD and CORS issues.
-
-  // Global client error handlers: if a runtime error occurs anywhere, switch to a safe iframe fallback
-  useEffect(() => {
-    const onError = (ev: ErrorEvent) => {
-      console.error('Global error captured:', ev.error || ev.message, ev);
-      setHasClientError(true);
-    };
-    const onRejection = (ev: PromiseRejectionEvent) => {
-      console.error('Unhandled rejection captured:', ev.reason || ev, ev);
-      setHasClientError(true);
-    };
-
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection as EventListener);
-
-    return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection as EventListener);
-    };
-  }, []);
-
-  // Note: blob fallback removed to avoid triggering CORS preflight / HEAD issues.
-  // The iframe will load the proxied `/api/v1/books/{id}/read` URL directly.
-
+  // loading/progress guards
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -529,9 +265,7 @@ export default function BookReadPage() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
           <h1 className="text-2xl font-bold mb-4">Invalid book id</h1>
-          <button onClick={() => router.push('/books')} className="text-blue-400 hover:underline">
-            Go back
-          </button>
+          <button onClick={() => router.push('/books')} className="text-blue-400 hover:underline">Go back</button>
         </div>
       </div>
     );
@@ -541,10 +275,8 @@ export default function BookReadPage() {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center text-white">
-          <h1 className="text-2xl font-bold mb-4">Kitap tapylmady Ã½a-da okalyp bilinmeÃ½Ã¤r</h1>
-          <button onClick={() => router.push(`/books/${bookId}`)} className="text-blue-400 hover:underline">
-            Yza dolan
-          </button>
+          <h1 className="text-2xl font-bold mb-4">No readable content</h1>
+          <button onClick={() => router.push(`/books/${bookId}`)} className="text-blue-400 hover:underline">Back</button>
         </div>
       </div>
     );
@@ -554,261 +286,164 @@ export default function BookReadPage() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50">
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="container-custom py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.push(`/books/${bookId}`)}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-          >
+          <button onClick={() => router.push(`/books/${bookId}`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
             <ArrowLeft size={20} />
-            <span className="hidden sm:inline">Yza</span>
+            <span className="hidden sm:inline">Back</span>
           </button>
 
           <div className="flex-1 text-center px-4">
             <h1 className="text-sm sm:text-base font-medium text-gray-900 truncate">{book.title}</h1>
           </div>
-
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
-          >
-            <Settings size={20} />
-          </button>
         </div>
       </div>
 
-      {showSettings && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40"
-          onClick={() => setShowSettings(false)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mt-20"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold mb-4">Sazlamalar</h3>
-
-            {viewMode === 'text' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Harp Ã¶lÃ§egi: {fontSize}px
-                </label>
-                <input
-                  type="range"
-                  min="14"
-                  max="24"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            )}
-
-            {viewMode === 'pdf' && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-600">PDF view uses the browser's built-in viewer. Use browser zoom and controls for best results.</p>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowSettings(false)}
-              className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-            >
-              Ãap
-            </button>
-          </div>
-        </div>
-      )}
+      {/* settings UI removed */}
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {viewMode === 'pdf' ? (
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            <div className="p-4">
-              {(() => {
-                const viewerFileUrl = pdfBlobUrl ?? pdfFileUrl;
-                if (!viewerFileUrl) {
-                  return (
-                    <div className="text-red-600 text-center py-12">
-                      <p className="mb-2">PDF url is missing</p>
-                      <p className="text-xs text-gray-500 mb-4">Book has pdf_file_url: {book?.pdf_file_url || 'no'}</p>
-                      <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        Go back
-                      </button>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div>
-                    <iframe title="pdf-iframe" src={viewerFileUrl} style={{ width: '100%', height: '800px', border: 'none' }} />
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden mx-auto max-w-4xl">
+            <div className="p-6">
+              <div className="p-2">
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setCurrentPdfPage((p) => Math.max(1, p - 1))} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Previous page"><ChevronLeft size={18} /></button>
+                    <button onClick={() => setCurrentPdfPage((p) => Math.min(totalPdfPages, p + 1))} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Next page"><ChevronRight size={18} /></button>
+                    <div className="text-sm text-gray-700 ml-3">Page {currentPdfPage} / {totalPdfPages || '—'}</div>
                   </div>
-                );
-              })()}
-            </div>
 
-            <div className="border-t bg-gray-50 px-8 py-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">PDF displayed via iframe. Page navigation is not available in iframe mode.</div>
-                <div className="flex items-center gap-3">
-                  <a href={pdfBlobUrl ?? pdfFileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">Open PDF in new tab</a>
-                  <a href={pdfBlobUrl ?? pdfFileUrl} download className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Download</a>
+                  {/* zoom controls removed — PDF opens at fixed 300% */}
                 </div>
+
+                <div
+                  className="relative w-full rounded mb-4 overflow-visible"
+                  onMouseEnter={() => setShowProgressSlider(true)}
+                  onMouseLeave={() => { setShowProgressSlider(false); setIsDragging(false); }}
+                >
+                  <div className="h-1.5 w-full bg-gray-100 rounded overflow-hidden" style={{ paddingLeft: THUMB_HALF_PX, paddingRight: THUMB_HALF_PX }}>
+                    <div className={`h-full bg-blue-500 ${isDragging ? '' : 'transition-all'}`} style={{ width: `${fillPercent}%` }} />
+                  </div>
+
+                  {totalPdfPages > 0 && (
+                    <input
+                      aria-label="Jump to page"
+                      type="range"
+                      min={1}
+                      max={totalPdfPages}
+                      value={currentPdfPage}
+                      onChange={(e) => { setCurrentPdfPage(Number(e.target.value)); }}
+                      onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragPage(v); setCurrentPdfPage(v); }}
+                      onMouseDown={() => { setIsDragging(true); setDragPage(currentPdfPage); }}
+                      onTouchStart={() => { setIsDragging(true); setDragPage(currentPdfPage); }}
+                      onMouseUp={() => { setIsDragging(false); setDragPage(null); }}
+                      onTouchEnd={() => { setIsDragging(false); setDragPage(null); }}
+                      onMouseLeave={() => { setIsDragging(false); setDragPage(null); }}
+                      className={`progress-range absolute top-0 h-6 z-20 transition-opacity ${showProgressSlider ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                      style={{ marginTop: 0, left: THUMB_HALF_PX, width: `calc(100% - ${THUMB_OUTER_PX}px)` }}
+                    />
+                  )}
+                </div>
+
+                <div className="bg-white border rounded-lg p-6 flex justify-center">
+                  <div className="w-full max-w-3xl border rounded-sm bg-white p-6 relative flex justify-center">
+                    <div style={{ userSelect: 'none' }}>
+                      <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Open/Download links removed from card per design */}
               </div>
             </div>
+
+            {/* footer removed per design */}
           </div>
         ) : viewMode === 'epub' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            <div className="flex justify-center items-center p-4 bg-gray-50">
+            <div className="p-4">
               {epubError ? (
                 <div className="text-red-600 text-center py-8">
                   <p className="mb-4">{epubError}</p>
-                  <button
-                    onClick={() => {
-                      setEpubError(null);
-                      loadEpubBook();
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    GaÃ½tadan synanyÅŸ
-                  </button>
+                  <div className="flex justify-center gap-3">
+                    <button onClick={() => { setEpubError(null); loadEpubBook(); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+                    <a href={book?.pdf_file_url || '#'} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Open original</a>
+                    <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-white text-gray-700 border rounded-lg">Back</button>
+                  </div>
                 </div>
               ) : (
-                <div ref={epubViewerRef} className="epub-viewer w-full" style={{ height: '600px', minHeight: '600px' }} />
+                <div ref={epubViewerRef} style={{ minHeight: 400 }} />
               )}
             </div>
-
-            {!epubError && epubRendition && (
-              <div className="border-t bg-gray-50 px-8 py-4">
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => {
-                      if (epubRendition) {
-                        epubRendition.prev();
-                        setCurrentPage((prev) => Math.max(1, prev - 1));
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <ChevronLeft size={18} />
-                    <span className="hidden sm:inline">Ã–Åˆki</span>
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    {authToken && progress && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Bookmark size={16} className="text-primary" />
-                        <span className="hidden sm:inline">Ãatda saklandy</span>
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-gray-900">EPUB</span>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (epubRendition) {
-                        epubRendition.next();
-                        setCurrentPage((prev) => prev + 1);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <span className="hidden sm:inline">Indiki</span>
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            <div
-              id="book-page-content"
-              className="px-8 sm:px-12 md:px-16 py-12 min-h-[600px] prose prose-gray max-w-none"
-              style={{
-                fontSize: `${fontSize}px`,
-                lineHeight: '1.8',
-                fontFamily: 'Georgia, serif',
-                columnCount: 1,
-              }}
-              onMouseUp={handleTextSelection}
-              dangerouslySetInnerHTML={{ __html: getPageContent() }}
-            />
-
-            <div className="border-t bg-gray-50 px-8 py-4">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft size={18} />
-                  <span className="hidden sm:inline">Ã–Åˆki</span>
-                </button>
-
-                <div className="flex items-center gap-3">
-                  {authToken && progress && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Bookmark size={16} className="text-primary" />
-                      <span className="hidden sm:inline">Ãatda saklandy</span>
-                    </div>
-                  )}
-                  <span className="text-sm font-medium text-gray-900">
-                    {currentPage} / {totalPages}
-                  </span>
-                </div>
-
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <span className="hidden sm:inline">Indiki</span>
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-
-              <div className="mt-4">
-                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${(currentPage / totalPages) * 100}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="text-center py-12">
+            <p className="text-sm text-gray-700">No readable view available for this book.</p>
           </div>
         )}
       </div>
 
-      {showColorPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setShowColorPicker(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl p-4 max-w-xs w-full">
-            <p className="text-sm font-medium text-gray-700 mb-3">ReÅˆk saÃ½laÅˆ:</p>
-            <div className="flex gap-2 mb-3">
-              {(['yellow', 'green', 'blue', 'red'] as const).map((color) => (
-                <button
-                  key={color}
-                  onClick={() => handleHighlight(color)}
-                  className={`flex-1 h-10 rounded-lg border-2 transition-transform hover:scale-105 ${
-                    color === 'yellow'
-                      ? 'bg-yellow-200 border-yellow-400'
-                      : color === 'green'
-                      ? 'bg-green-200 border-green-400'
-                      : color === 'blue'
-                      ? 'bg-blue-200 border-blue-400'
-                      : 'bg-red-200 border-red-400'
-                  }`}
-                />
-              ))}
-            </div>
-            <button
-              onClick={handleClearHighlight}
-              className="w-full px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-            >
-              {selectedHighlightIds.length > 0 ? 'BelgiÅˆi aÃ½yr' : 'GoÃ½bolsun et'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* text highlighting and image modal removed in PDF-only reader */}
+      <style jsx>{`
+        .progress-range {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          height: 6px;
+        }
+
+        /* WebKit track - keep transparent so underlying bar shows */
+        .progress-range::-webkit-slider-runnable-track {
+          height: 6px;
+          background: transparent;
+        }
+
+        /* Thumb */
+        .progress-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: #065f46; /* emerald-800 */
+          border: 4px solid #ffffff;
+          box-shadow: 0 6px 14px rgba(2,6,23,0.15);
+          margin-top: -10px; /* slight downward adjustment so circle is centered visually */
+          cursor: pointer;
+        }
+
+        /* Firefox */
+        .progress-range::-moz-range-thumb {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: #065f46;
+          border: 4px solid #ffffff;
+          margin-top: -10px;
+          box-shadow: 0 6px 14px rgba(2,6,23,0.15);
+          cursor: pointer;
+        }
+
+        /* IE */
+        .progress-range::-ms-thumb {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: #065f46;
+          border: 4px solid #ffffff;
+          margin-top: -10px;
+          cursor: pointer;
+        }
+
+        /* Hide default focus outline and provide subtle ring */
+        .progress-range:focus {
+          outline: none;
+        }
+        .progress-range:focus::-webkit-slider-thumb {
+          box-shadow: 0 6px 18px rgba(2,6,23,0.25), 0 0 0 4px rgba(6,95,70,0.12);
+        }
+        .progress-range:focus::-moz-range-thumb {
+          box-shadow: 0 6px 18px rgba(2,6,23,0.25), 0 0 0 4px rgba(6,95,70,0.12);
+        }
+      `}</style>
     </div>
   );
 }
