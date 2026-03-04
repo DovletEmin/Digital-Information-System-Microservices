@@ -18,10 +18,10 @@ type Config struct {
 
 func LoadConfig() *Config {
 	cfg := &Config{
-		Port:           getEnv("PORT", "8005"),
-		MinioEndpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
-		MinioPublicURL: getEnv("MINIO_PUBLIC_URL", "http://192.168.55.154:9000"),
-		// MinioPublicURL: getEnv("MINIO_PUBLIC_URL", "http://172.20.102.83:9000"),
+		Port:          getEnv("PORT", "8005"),
+		MinioEndpoint: getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		// MinioPublicURL: getEnv("MINIO_PUBLIC_URL", "http://192.168.55.154:9000"),
+		MinioPublicURL: getEnv("MINIO_PUBLIC_URL", "http://172.20.102.83:9000"),
 		MinioAccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinioSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",

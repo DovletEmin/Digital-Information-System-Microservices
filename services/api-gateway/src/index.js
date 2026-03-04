@@ -122,11 +122,20 @@ app.get('/api/v1/books/:bookId/read', async (req, res) => {
         Authorization: req.headers.authorization || undefined,
       },
       timeout: 60000,
+      // allow non-2xx responses to be returned so we can forward the exact status/body
+      validateStatus: () => true,
     });
 
     // Copy content-type and content-disposition if present
     if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
     if (upstream.headers['content-disposition']) res.setHeader('Content-Disposition', upstream.headers['content-disposition']);
+
+    // If upstream returned an error status (e.g. 404), forward that status and body
+    if (upstream.status && upstream.status >= 400) {
+      res.status(upstream.status);
+      upstream.data.pipe(res);
+      return;
+    }
 
     // Allow framing by the requesting origin only
     const origin = req.headers.origin || req.headers.referer || '*';
@@ -146,6 +155,52 @@ app.get('/api/v1/books/:bookId/read', async (req, res) => {
   }
 });
 
+// Proxy EPUB files via gateway to avoid CORS and direct MinIO access
+app.get('/api/v1/books/:bookId/epub', async (req, res) => {
+  try {
+    // First fetch book metadata from content service
+    const metaUrl = `${services.content}/api/v1/books/${req.params.bookId}`;
+    const metaResp = await axios.get(metaUrl, { timeout: 10000, validateStatus: () => true });
+    if (!metaResp || metaResp.status >= 400) {
+      logger.warn(`Failed to fetch book metadata: ${metaResp && metaResp.status}`);
+      return res.status(502).json({ error: 'Failed to fetch book metadata' });
+    }
+    const book = metaResp.data;
+    const epubUrl = book?.epub_file_url;
+    if (!epubUrl) return res.status(404).json({ detail: 'EPUB file not found for this book' });
+
+    const upstream = await axios.get(epubUrl, {
+      responseType: 'stream',
+      headers: { Authorization: req.headers.authorization || undefined },
+      timeout: 60000,
+      validateStatus: () => true,
+    });
+
+    if (upstream.status && upstream.status >= 400) {
+      res.status(upstream.status);
+      upstream.data.pipe(res);
+      return;
+    }
+
+    if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
+    if (upstream.headers['content-disposition']) res.setHeader('Content-Disposition', upstream.headers['content-disposition']);
+
+    const origin = req.headers.origin || req.headers.referer || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+    res.removeHeader('Content-Security-Policy');
+    res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${origin}`);
+    res.setHeader('X-Frame-Options', 'ALLOW-FROM ' + (origin === '*' ? ' ' : origin));
+
+    upstream.data.pipe(res);
+  } catch (err) {
+    logger.error('Failed to proxy EPUB:', err.message || err);
+    res.status(502).json({ error: 'Failed to fetch EPUB' });
+  }
+});
+
 app.get('/api/v1/books/:bookId/download', async (req, res) => {
   try {
     const targetUrl = `${services.content}${req.originalUrl}`;
@@ -156,10 +211,17 @@ app.get('/api/v1/books/:bookId/download', async (req, res) => {
         Authorization: req.headers.authorization || undefined,
       },
       timeout: 60000,
+      validateStatus: () => true,
     });
 
     if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
     if (upstream.headers['content-disposition']) res.setHeader('Content-Disposition', upstream.headers['content-disposition']);
+
+    if (upstream.status && upstream.status >= 400) {
+      res.status(upstream.status);
+      upstream.data.pipe(res);
+      return;
+    }
 
     const origin = req.headers.origin || req.headers.referer || '*';
     res.setHeader('Access-Control-Allow-Origin', origin);

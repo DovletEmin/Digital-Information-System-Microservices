@@ -18,7 +18,7 @@ export default function BookReadPage() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'pdf' | 'epub' | null>('pdf');
+  const [viewMode, setViewMode] = useState<'pdf' | 'epub' | 'text' | null>('pdf');
 
   // settings UI removed per design — PDF always opens at fixed scale
 
@@ -29,7 +29,19 @@ export default function BookReadPage() {
   // epub
   const [epubError, setEpubError] = useState<string | null>(null);
   const epubViewerRef = useRef<HTMLDivElement | null>(null);
+  const epubBlobUrlRef = useRef<string | null>(null);
   const [epubRendition, setEpubRendition] = useState<any>(null);
+  const [epubBookInstance, setEpubBookInstance] = useState<any>(null);
+  const [totalEpubLocations, setTotalEpubLocations] = useState<number>(0);
+  const [currentEpubLocationIndex, setCurrentEpubLocationIndex] = useState<number>(1);
+  const [epubPercent, setEpubPercent] = useState<number>(0);
+  const [readerLoading, setReaderLoading] = useState<boolean>(false);
+  const [readerError, setReaderError] = useState<string | null>(null);
+
+  // text
+  const textContainerRef = useRef<HTMLDivElement | null>(null);
+  const [totalTextPages, setTotalTextPages] = useState<number>(0);
+  const [currentTextPage, setCurrentTextPage] = useState<number>(1);
 
   // pdf state
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -44,6 +56,8 @@ export default function BookReadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragPage, setDragPage] = useState<number | null>(null);
 
+  const [dragGlobalPage, setDragGlobalPage] = useState<number | null>(null);
+
   const pdfReadingPercent = totalPdfPages && totalPdfPages > 0 ? Math.round((currentPdfPage / totalPdfPages) * 100) : pdfLoadingProgress;
 
   // Thumb sizing (22px visual + 4px border each side = 30px outer). Use half-thumb padding so thumb centers at track ends.
@@ -51,17 +65,46 @@ export default function BookReadPage() {
   const THUMB_HALF_PX = THUMB_OUTER_PX / 2;
 
   // Map pages to 0..100 range so page 1 -> 0% and last page -> 100%.
+  // generic fill percent for slider (works for pdf, epub, text)
   const fillPercent = useMemo(() => {
-    if (!totalPdfPages || totalPdfPages <= 1) return pdfReadingPercent;
-    const pageForCalc = dragPage !== null ? dragPage : currentPdfPage;
-    const pct = ((pageForCalc - 1) / (totalPdfPages - 1)) * 100;
+    let total = 0;
+    let current = 0;
+    if (viewMode === 'pdf') {
+      total = totalPdfPages || 0;
+      current = currentPdfPage || 0;
+    } else if (viewMode === 'epub') {
+      total = totalEpubLocations || 0;
+      current = currentEpubLocationIndex || 0;
+    } else if (viewMode === 'text') {
+      total = totalTextPages || 0;
+      current = currentTextPage || 0;
+    }
+    if (!total || total <= 1) {
+      if (viewMode === 'pdf') return pdfReadingPercent;
+      if (viewMode === 'epub') return epubPercent;
+      return total === 0 ? 0 : Math.round((current / Math.max(1, total)) * 100);
+    }
+    const pageForCalc = dragGlobalPage !== null ? dragGlobalPage : current;
+    const pct = ((pageForCalc - 1) / (total - 1)) * 100;
     return Math.max(0, Math.min(100, Number(pct.toFixed(2))));
-  }, [currentPdfPage, totalPdfPages, pdfReadingPercent, dragPage]);
+  }, [viewMode, currentPdfPage, totalPdfPages, currentEpubLocationIndex, totalEpubLocations, epubPercent, currentTextPage, totalTextPages, pdfReadingPercent, dragGlobalPage]);
+
+  // adjust fill to account for half-thumb padding so the fill reaches the track edges
+  const fillStyle = useMemo(() => ({
+    // extend a couple pixels to avoid a visible hairline at the left edge
+    width: `calc(${fillPercent}% + ${THUMB_HALF_PX + 2}px)`,
+    marginLeft: `-${THUMB_HALF_PX + 2}px`,
+    transform: fillPercent > 0 ? `translateX(-${THUMB_HALF_PX}px)` : undefined,
+    minWidth: fillPercent > 0 ? `${Math.max(8, THUMB_OUTER_PX)}px` : '0px',
+    borderRadius: '9999px',
+  }), [fillPercent, THUMB_HALF_PX]);
 
   // computed urls
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
   const proxyPdfUrl = book && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  const proxyEpubUrl = book && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/epub` : '';
   const absolutePdfUrl = book?.pdf_file_url && /^https?:\/\//i.test(book.pdf_file_url) ? book.pdf_file_url : '';
+  const absoluteEpubUrl = book?.epub_file_url && /^https?:\/\//i.test(book.epub_file_url) ? book.epub_file_url : '';
 
   // keep auth token in sync with localStorage
   useEffect(() => {
@@ -90,6 +133,8 @@ export default function BookReadPage() {
           setViewMode('pdf');
         } else if (data?.epub_file_url) {
           setViewMode('epub');
+        } else if (data?.content) {
+          setViewMode('text');
         } else {
           setViewMode(null);
         }
@@ -115,6 +160,11 @@ export default function BookReadPage() {
           setProgress(d);
           if (d.current_page) {
             setCurrentPdfPage(d.current_page);
+            setCurrentTextPage(d.current_page);
+            setCurrentEpubLocationIndex(d.current_page);
+          }
+          if (d.progress_percentage && typeof d.progress_percentage === 'number') {
+            setEpubPercent(Math.round(d.progress_percentage));
           }
         }
       } catch (e) {
@@ -159,9 +209,26 @@ export default function BookReadPage() {
           if (!cancelled) setEffectivePdfUrl(proxyPdfUrl);
           return;
         }
-        if (!cancelled) setEffectivePdfUrl(absolutePdfUrl || null);
+
+        // If proxy doesn't return a PDF, fall back — prefer absolutePdfUrl, otherwise switch viewMode to epub/text when available
+        const fallback = absolutePdfUrl || null;
+        if (!cancelled) setEffectivePdfUrl(fallback);
+        if (!cancelled) {
+          if (!fallback) {
+            if (book?.epub_file_url) setViewMode('epub');
+            else if (book?.content) setViewMode('text');
+            else setViewMode(null);
+          }
+        }
       } catch (e) {
-        if (!cancelled) setEffectivePdfUrl(absolutePdfUrl || null);
+        if (!cancelled) {
+          setEffectivePdfUrl(absolutePdfUrl || null);
+          if (!absolutePdfUrl) {
+            if (book?.epub_file_url) setViewMode('epub');
+            else if (book?.content) setViewMode('text');
+            else setViewMode(null);
+          }
+        }
       }
     };
     run();
@@ -177,6 +244,8 @@ export default function BookReadPage() {
       const url = pdfBlobUrl ?? effectivePdfUrl ?? absolutePdfUrl;
       if (!url) return;
       try {
+        setReaderError(null);
+        setReaderLoading(true);
         setPdfLoadingProgress(0);
         setPdfDoc(null);
         setTotalPdfPages(0);
@@ -190,7 +259,9 @@ export default function BookReadPage() {
         setPdfDoc(doc);
         setTotalPdfPages(doc.numPages || 0);
         setPdfLoadingProgress(100);
+        setReaderLoading(false);
       } catch (e) {
+        setReaderLoading(false);
         console.error('PDF load failed', e);
       }
     };
@@ -227,29 +298,156 @@ export default function BookReadPage() {
 
   // autosave debounce
   useEffect(() => {
-    if (!(viewMode === 'pdf' && authToken && bookId !== null && totalPdfPages > 0)) return;
-    const t = setTimeout(() => saveProgress(currentPdfPage, totalPdfPages), 800);
-    return () => clearTimeout(t);
-  }, [currentPdfPage, totalPdfPages, viewMode, authToken, saveProgress, bookId]);
+    // autosave for pdf, text, epub
+    if (!authToken || bookId === null) return;
+    if (viewMode === 'pdf' && totalPdfPages > 0) {
+      const t = setTimeout(() => saveProgress(currentPdfPage, totalPdfPages), 800);
+      return () => clearTimeout(t);
+    }
+    if (viewMode === 'text' && totalTextPages > 0) {
+      const t = setTimeout(() => saveProgress(currentTextPage, totalTextPages), 800);
+      return () => clearTimeout(t);
+    }
+    if (viewMode === 'epub' && totalEpubLocations > 0) {
+      const t = setTimeout(() => saveProgress(currentEpubLocationIndex, totalEpubLocations), 800);
+      return () => clearTimeout(t);
+    }
+  }, [viewMode, authToken, bookId, currentPdfPage, totalPdfPages, currentTextPage, totalTextPages, currentEpubLocationIndex, totalEpubLocations, saveProgress]);
 
-  // EPUB loader (minimal)
+  // EPUB loader (enhanced)
   const loadEpubBook = useCallback(async () => {
-    if (typeof window === 'undefined' || !book?.epub_file_url) return;
+    if (typeof window === 'undefined' || (!book?.epub_file_url && !proxyEpubUrl && !absoluteEpubUrl)) return;
+    let createdBlobUrl: string | null = null;
     try {
       setEpubError(null);
+      setReaderError(null);
+      setReaderLoading(true);
       const ePub = (await import('epubjs')).default;
-      const bookInstance = ePub(book.epub_file_url);
+      // prefer proxied EPUB via API gateway for same-origin/CORS safety
+      const epubUrl = proxyEpubUrl || absoluteEpubUrl || book.epub_file_url;
+
+      const fetchHeaders: Record<string, string> = {};
+      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch(epubUrl, { method: 'GET', headers: fetchHeaders });
+      if (!resp.ok) throw new Error(`Failed to fetch EPUB: ${resp.status}`);
+      const ab = await resp.arrayBuffer();
+
+      // Create blob URL (most compatible) and initialize epub.js with it.
+      const blob = new Blob([ab], { type: resp.headers.get('content-type') || 'application/epub+zip' });
+      const blobUrl = URL.createObjectURL(blob);
+      createdBlobUrl = blobUrl;
+      epubBlobUrlRef.current = blobUrl;
+
+      const bookInstance = ePub(blobUrl);
+      try { await bookInstance.ready; } catch (e) { /* ignore */ }
+      try { await bookInstance.locations.generate(1200); } catch (e) { /* ignore */ }
+      const totalLoc = (bookInstance.locations && typeof bookInstance.locations.length === 'function') ? bookInstance.locations.length() : 0;
+      setTotalEpubLocations(totalLoc || 0);
+      setEpubBookInstance(bookInstance);
+
       if (epubViewerRef.current) {
         epubViewerRef.current.innerHTML = '';
         const rendition = bookInstance.renderTo(epubViewerRef.current, { width: '100%', height: '100%', spread: 'none' });
+        rendition.on('relocated', (location: any) => {
+          try {
+            const cfi = location?.start?.cfi;
+            let pct = 0;
+            if (bookInstance.locations && cfi && typeof bookInstance.locations.percentageFromCfi === 'function') {
+              pct = bookInstance.locations.percentageFromCfi(cfi) || 0;
+            }
+            const percent = Math.max(0, Math.min(100, Math.round(pct * 100)));
+            setEpubPercent(percent);
+            if (totalLoc && typeof totalLoc === 'number') {
+              setCurrentEpubLocationIndex(Math.max(1, Math.round(pct * totalLoc)));
+            }
+          } catch (e) { console.warn('relocated handler error', e); }
+        });
+
         await rendition.display();
         setEpubRendition(rendition);
+        setReaderLoading(false);
       }
-    } catch (e) {
-      console.error('Failed to load EPUB', e);
-      setEpubError('Failed to load EPUB');
+    } catch (err: any) {
+      console.error('Failed to load EPUB', err);
+      const msg = err?.message || String(err);
+      setEpubError(msg);
+      setReaderError(`EPUB load error: ${msg}`);
+      setReaderLoading(false);
+    } finally {
+      // Revoke blob URL when component unmounts or next load happens - keep it for rendering lifetime
+      // We'll revoke on cleanup effect below when epubBookInstance changes/unmounts.
+      // If we created a blobUrl but did not set bookInstance, revoke immediately.
+      if (createdBlobUrl && !epubBookInstance) {
+        try { URL.revokeObjectURL(createdBlobUrl); } catch (e) {}
+      }
     }
-  }, [book]);
+  }, [book, proxyEpubUrl, absoluteEpubUrl, authToken]);
+
+  // auto-load EPUB when viewMode is epub
+  useEffect(() => {
+    if (viewMode === 'epub') loadEpubBook();
+  }, [viewMode, loadEpubBook]);
+
+  // cleanup blob URL and epub instances on unmount or when book changes
+  useEffect(() => {
+    return () => {
+      if (epubBlobUrlRef.current) {
+        try { URL.revokeObjectURL(epubBlobUrlRef.current); } catch (e) {}
+        epubBlobUrlRef.current = null;
+      }
+      try { epubRendition && typeof epubRendition.destroy === 'function' && epubRendition.destroy(); } catch (e) {}
+      try { epubBookInstance && typeof epubBookInstance.destroy === 'function' && epubBookInstance.destroy(); } catch (e) {}
+    };
+  }, [epubBookInstance, epubRendition]);
+
+  // Open preferred format (PDF -> EPUB -> Text)
+  const openPreferred = useCallback(() => {
+    setReaderError(null);
+    setReaderLoading(true);
+    // prefer PDF if available
+    const hasPdf = Boolean(effectivePdfUrl || absolutePdfUrl || pdfBlobUrl);
+    const hasEpub = Boolean(proxyEpubUrl || absoluteEpubUrl || book?.epub_file_url);
+    const hasText = Boolean(book?.content);
+    if (hasPdf) {
+      setViewMode('pdf');
+      setReaderLoading(false);
+      return;
+    }
+    if (hasEpub) {
+      setViewMode('epub');
+      // loadEpubBook effect will unset readerLoading
+      return;
+    }
+    if (hasText) {
+      setViewMode('text');
+      setReaderLoading(false);
+      return;
+    }
+    setReaderError('No readable content available');
+    setReaderLoading(false);
+  }, [effectivePdfUrl, absolutePdfUrl, pdfBlobUrl, proxyEpubUrl, absoluteEpubUrl, book]);
+
+  // compute text pages when text view is active
+  useEffect(() => {
+    if (viewMode !== 'text') return;
+    const el = textContainerRef.current;
+    if (!el) return;
+    const compute = () => {
+      const pages = Math.max(1, Math.ceil(el.scrollHeight / Math.max(1, el.clientHeight)));
+      setTotalTextPages(pages);
+      if (progress?.current_page) {
+        const p = Math.min(pages, Math.max(1, progress.current_page));
+        el.scrollTop = (p - 1) * el.clientHeight;
+        setCurrentTextPage(p);
+      } else {
+        setCurrentTextPage(1);
+      }
+    };
+    // compute after a short delay in case images/fonts affect layout
+    const t = setTimeout(compute, 120);
+    window.addEventListener('resize', compute);
+    return () => { clearTimeout(t); window.removeEventListener('resize', compute); };
+  }, [viewMode, book?.content, progress]);
 
   // loading/progress guards
   if (loading) {
@@ -294,12 +492,25 @@ export default function BookReadPage() {
           <div className="flex-1 text-center px-4">
             <h1 className="text-sm sm:text-base font-medium text-gray-900 truncate">{book.title}</h1>
           </div>
+          <div className="pr-4">
+            <button onClick={openPreferred} className="px-3 py-2 bg-blue-600 text-white rounded-lg">Open / Read</button>
+          </div>
         </div>
       </div>
 
       {/* settings UI removed */}
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {readerError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4">
+            {readerError}
+          </div>
+        )}
+
+        {readerLoading && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-4 text-sm text-gray-700">Loading reader…</div>
+        )}
+
         {viewMode === 'pdf' ? (
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden mx-auto max-w-4xl">
             <div className="p-6">
@@ -320,7 +531,7 @@ export default function BookReadPage() {
                   onMouseLeave={() => { setShowProgressSlider(false); setIsDragging(false); }}
                 >
                   <div className="h-1.5 w-full bg-gray-100 rounded overflow-hidden" style={{ paddingLeft: THUMB_HALF_PX, paddingRight: THUMB_HALF_PX }}>
-                    <div className={`h-full bg-blue-500 ${isDragging ? '' : 'transition-all'}`} style={{ width: `${fillPercent}%` }} />
+                    <div className={`h-full bg-blue-500 ${isDragging ? '' : 'transition-all'}`} style={fillStyle} />
                   </div>
 
                   {totalPdfPages > 0 && (
@@ -360,6 +571,76 @@ export default function BookReadPage() {
         ) : viewMode === 'epub' ? (
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <div className="p-4">
+              <div className="flex items-center justify-between mb-3 gap-3">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { try { epubRendition?.prev(); } catch (e) {} }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Previous page"><ChevronLeft size={18} /></button>
+                  <button onClick={() => { try { epubRendition?.next(); } catch (e) {} }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Next page"><ChevronRight size={18} /></button>
+                  <div className="text-sm text-gray-700 ml-3">{totalEpubLocations > 0 ? `Page ${currentEpubLocationIndex} / ${totalEpubLocations}` : `${epubPercent}%`}</div>
+                </div>
+              </div>
+
+              <div className="relative w-full rounded mb-4 overflow-visible">
+                <div className="h-1.5 w-full bg-gray-100 rounded overflow-hidden" style={{ paddingLeft: THUMB_HALF_PX, paddingRight: THUMB_HALF_PX }}>
+                  <div className={`h-full bg-blue-500 ${isDragging ? '' : 'transition-all'}`} style={fillStyle} />
+                </div>
+
+                {(totalEpubLocations > 0) ? (
+                  <input
+                    aria-label="Jump to location"
+                    type="range"
+                    min={1}
+                    max={totalEpubLocations}
+                    value={currentEpubLocationIndex}
+                    onChange={async (e) => {
+                      const v = Number((e.target as HTMLInputElement).value);
+                      setCurrentEpubLocationIndex(v);
+                      try {
+                        const pct = totalEpubLocations > 0 ? (v / totalEpubLocations) : 0;
+                        const cfi = epubBookInstance?.locations && typeof epubBookInstance.locations.cfiFromPercentage === 'function'
+                          ? epubBookInstance.locations.cfiFromPercentage(pct)
+                          : null;
+                        if (cfi && epubRendition) await epubRendition.display(cfi);
+                      } catch (e) {}
+                    }}
+                    onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragGlobalPage(v); setCurrentEpubLocationIndex(v); }}
+                    onMouseDown={() => { setIsDragging(true); setDragGlobalPage(currentEpubLocationIndex); }}
+                    onTouchStart={() => { setIsDragging(true); setDragGlobalPage(currentEpubLocationIndex); }}
+                    onMouseUp={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    onTouchEnd={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    onMouseLeave={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    className={`progress-range absolute top-0 h-6 z-20 transition-opacity ${showProgressSlider ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                    style={{ marginTop: 0, left: THUMB_HALF_PX, width: `calc(100% - ${THUMB_OUTER_PX}px)` }}
+                  />
+                ) : (
+                  <input
+                    aria-label="Jump to percent"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={epubPercent}
+                    onChange={async (e) => {
+                      const v = Number((e.target as HTMLInputElement).value);
+                      setEpubPercent(v);
+                      try {
+                        const pct = v / 100;
+                        const cfi = epubBookInstance?.locations && typeof epubBookInstance.locations.cfiFromPercentage === 'function'
+                          ? epubBookInstance.locations.cfiFromPercentage(pct)
+                          : null;
+                        if (cfi && epubRendition) await epubRendition.display(cfi);
+                      } catch (e) {}
+                    }}
+                    onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragGlobalPage(v); setEpubPercent(v); }}
+                    onMouseDown={() => { setIsDragging(true); setDragGlobalPage(epubPercent); }}
+                    onTouchStart={() => { setIsDragging(true); setDragGlobalPage(epubPercent); }}
+                    onMouseUp={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    onTouchEnd={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    onMouseLeave={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                    className={`progress-range absolute top-0 h-6 z-20 transition-opacity ${showProgressSlider ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                    style={{ marginTop: 0, left: THUMB_HALF_PX, width: `calc(100% - ${THUMB_OUTER_PX}px)` }}
+                  />
+                )}
+              </div>
+
               {epubError ? (
                 <div className="text-red-600 text-center py-8">
                   <p className="mb-4">{epubError}</p>
@@ -372,6 +653,64 @@ export default function BookReadPage() {
               ) : (
                 <div ref={epubViewerRef} style={{ minHeight: 400 }} />
               )}
+            </div>
+          </div>
+        ) : viewMode === 'text' ? (
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden mx-auto max-w-4xl">
+            <div className="p-6">
+              <div className="p-2">
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => {
+                      const el = textContainerRef.current;
+                      if (!el) return;
+                      const h = el.clientHeight || 600;
+                      el.scrollBy({ top: -h, behavior: 'smooth' });
+                    }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Previous page"><ChevronLeft size={18} /></button>
+                    <button onClick={() => {
+                      const el = textContainerRef.current;
+                      if (!el) return;
+                      const h = el.clientHeight || 600;
+                      el.scrollBy({ top: h, behavior: 'smooth' });
+                    }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Next page"><ChevronRight size={18} /></button>
+                    <div className="text-sm text-gray-700 ml-3">Page {currentTextPage} / {totalTextPages || '—'}</div>
+                  </div>
+                </div>
+
+                <div className="relative w-full rounded mb-4 overflow-visible" onMouseEnter={() => setShowProgressSlider(true)} onMouseLeave={() => { setShowProgressSlider(false); setIsDragging(false); }}>
+                  <div className="h-1.5 w-full bg-gray-100 rounded overflow-hidden" style={{ paddingLeft: THUMB_HALF_PX, paddingRight: THUMB_HALF_PX }}>
+                    <div className={`h-full bg-blue-500 ${isDragging ? '' : 'transition-all'}`} style={fillStyle} />
+                  </div>
+
+                  {totalTextPages > 0 && (
+                    <input
+                      aria-label="Jump to page"
+                      type="range"
+                      min={1}
+                      max={totalTextPages}
+                      value={currentTextPage}
+                      onChange={(e) => { const v = Number(e.target.value); setCurrentTextPage(v); const el = textContainerRef.current; if (el) el.scrollTop = (v - 1) * el.clientHeight; }}
+                      onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragGlobalPage(v); setCurrentTextPage(v); }}
+                      onMouseDown={() => { setIsDragging(true); setDragGlobalPage(currentTextPage); }}
+                      onTouchStart={() => { setIsDragging(true); setDragGlobalPage(currentTextPage); }}
+                      onMouseUp={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                      onTouchEnd={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                      onMouseLeave={() => { setIsDragging(false); setDragGlobalPage(null); }}
+                      className={`progress-range absolute top-0 h-6 z-20 transition-opacity ${showProgressSlider ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                      style={{ marginTop: 0, left: THUMB_HALF_PX, width: `calc(100% - ${THUMB_OUTER_PX}px)` }}
+                    />
+                  )}
+                </div>
+
+                <div className="bg-white border rounded-lg p-6 max-h-[70vh] overflow-auto" ref={textContainerRef} onScroll={() => {
+                  const el = textContainerRef.current;
+                  if (!el) return;
+                  const page = Math.floor(el.scrollTop / Math.max(1, el.clientHeight)) + 1;
+                  setCurrentTextPage(page);
+                }}>
+                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: book?.content || '' }} />
+                </div>
+              </div>
             </div>
           </div>
         ) : (
