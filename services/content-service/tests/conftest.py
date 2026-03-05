@@ -4,6 +4,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 
 import pytest
+from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -60,7 +61,7 @@ def test_article(db, test_category):
         authors_workplace="Test University",
         thumbnail="http://example.com/thumb.jpg",
         content="Test content",
-        publication_date="2024-01-01",
+        publication_date=datetime(2024, 1, 1),
         language="tm",
         type="local",
         views=0,
