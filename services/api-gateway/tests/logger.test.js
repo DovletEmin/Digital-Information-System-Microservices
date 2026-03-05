@@ -1,4 +1,5 @@
 const winston = require('winston');
+const { Writable } = require('stream');
 
 describe('Logger', () => {
   let logger;
@@ -6,18 +7,19 @@ describe('Logger', () => {
 
   beforeEach(() => {
     logs = [];
-    
+
+    const writeStream = new Writable({
+      write(chunk, encoding, callback) {
+        logs.push(JSON.parse(chunk.toString()));
+        callback();
+      }
+    });
+
     logger = winston.createLogger({
       level: 'info',
       format: winston.format.json(),
       transports: [
-        new winston.transports.Stream({
-          stream: {
-            write: (message) => {
-              logs.push(JSON.parse(message));
-            }
-          }
-        })
+        new winston.transports.Stream({ stream: writeStream })
       ]
     });
   });
