@@ -4,60 +4,44 @@ from fastapi import status
 
 def test_create_category(client):
     response = client.post(
-        "/api/v1/categories",
-        json={
-            "name_tm": "Bilim",
-            "name_ru": "Наука",
-            "name_en": "Science"
-        }
+        "/api/v1/article-categories",
+        json={"name": "Science"}
     )
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
-    assert data["name_tm"] == "Bilim"
-    assert data["name_ru"] == "Наука"
-    assert data["name_en"] == "Science"
+    assert data["name"] == "Science"
     assert "id" in data
 
 
 def test_get_categories(client, test_category):
-    response = client.get("/api/v1/categories")
+    response = client.get("/api/v1/article-categories")
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
+    assert isinstance(data, list)
     assert len(data) >= 1
     assert any(cat["id"] == test_category.id for cat in data)
 
 
-def test_get_category_by_id(client, test_category):
-    response = client.get(f"/api/v1/categories/{test_category.id}")
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["id"] == test_category.id
-    assert data["name_tm"] == test_category.name_tm
-
-
 def test_update_category(client, test_category):
     response = client.put(
-        f"/api/v1/categories/{test_category.id}",
-        json={
-            "name_tm": "Updated TM",
-            "name_ru": "Updated RU",
-            "name_en": "Updated EN"
-        }
+        f"/api/v1/article-categories/{test_category.id}",
+        json={"name": "Updated Category"}
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["name_tm"] == "Updated TM"
+    assert data["name"] == "Updated Category"
 
 
 def test_delete_category(client, test_category):
-    response = client.delete(f"/api/v1/categories/{test_category.id}")
-    assert response.status_code == status.HTTP_204_NO_CONTENT
-    
+    response = client.delete(f"/api/v1/article-categories/{test_category.id}")
+    assert response.status_code == status.HTTP_200_OK
+
     # Verify deletion
-    response = client.get(f"/api/v1/categories/{test_category.id}")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
+    response = client.get("/api/v1/article-categories")
+    data = response.json()
+    assert not any(cat["id"] == test_category.id for cat in data)
 
 
-def test_get_nonexistent_category(client):
-    response = client.get("/api/v1/categories/99999")
+def test_delete_nonexistent_category(client):
+    response = client.delete("/api/v1/article-categories/99999")
     assert response.status_code == status.HTTP_404_NOT_FOUND

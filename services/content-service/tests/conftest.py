@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database import Base, get_db
 from main import app
-from models import Category, Article
+from models import ArticleCategory, Article
 
 # Test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -34,13 +34,13 @@ def db():
 
 
 @pytest.fixture
-def client():
+def client(db):
     return TestClient(app)
 
 
 @pytest.fixture
 def test_category(db):
-    category = Category(name_tm="Test TM", name_ru="Test RU", name_en="Test EN")
+    category = ArticleCategory(name="Test Category")
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -62,8 +62,8 @@ def test_article(db, test_category):
         rating=0.0,
         average_rating=0.0,
         rating_count=0,
-        category_id=test_category.id
     )
+    article.categories = [test_category]
     db.add(article)
     db.commit()
     db.refresh(article)

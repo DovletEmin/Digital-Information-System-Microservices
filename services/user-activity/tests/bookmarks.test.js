@@ -22,12 +22,12 @@ describe('Bookmarks API', () => {
     // Bookmark routes
     app.post('/bookmarks', async (req, res) => {
       try {
-        const { content_id, content_type } = req.body;
+        const { content_id: contentId, content_type: contentType } = req.body;
         
         const existing = await Bookmark.findOne({
-          user_id: req.user.id,
-          content_id,
-          content_type
+          userId: req.user.id,
+          contentId,
+          contentType
         });
 
         if (existing) {
@@ -35,9 +35,9 @@ describe('Bookmarks API', () => {
         }
 
         const bookmark = new Bookmark({
-          user_id: req.user.id,
-          content_id,
-          content_type
+          userId: req.user.id,
+          contentId,
+          contentType
         });
 
         await bookmark.save();
@@ -49,7 +49,7 @@ describe('Bookmarks API', () => {
 
     app.get('/bookmarks', async (req, res) => {
       try {
-        const bookmarks = await Bookmark.find({ user_id: req.user.id });
+        const bookmarks = await Bookmark.find({ userId: req.user.id });
         res.json(bookmarks);
       } catch (error) {
         res.status(500).json({ error: error.message });
@@ -60,7 +60,7 @@ describe('Bookmarks API', () => {
       try {
         const bookmark = await Bookmark.findOneAndDelete({
           _id: req.params.id,
-          user_id: req.user.id
+          userId: req.user.id
         });
 
         if (!bookmark) {
@@ -84,8 +84,8 @@ describe('Bookmarks API', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('_id');
-    expect(response.body.content_id).toBe(testContentId);
-    expect(response.body.user_id).toBe(testUserId);
+    expect(response.body.contentId).toBe(testContentId);
+    expect(response.body.userId).toBe(testUserId);
   });
 
   test('should not create duplicate bookmark', async () => {

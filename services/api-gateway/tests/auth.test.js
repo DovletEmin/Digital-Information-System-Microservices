@@ -1,11 +1,21 @@
 const request = require('supertest');
 const express = require('express');
+
+// Mock axios BEFORE requiring the auth middleware so the middleware picks up the mock
+jest.mock('axios');
+const axios = require('axios');
+
 const authMiddleware = require('../src/middleware/auth');
 
 describe('Auth Middleware', () => {
   let app;
 
   beforeEach(() => {
+    // Default: auth service rejects with 401 (invalid token)
+    const authError = new Error('Request failed with status code 401');
+    authError.response = { status: 401, data: { error: 'Invalid token' } };
+    axios.post.mockRejectedValue(authError);
+
     app = express();
     app.use(express.json());
     
@@ -16,6 +26,10 @@ describe('Auth Middleware', () => {
     app.get('/public', (req, res) => {
       res.json({ message: 'Public route' });
     });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   test('should allow access to public routes', async () => {
