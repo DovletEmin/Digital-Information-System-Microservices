@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # 🔥 защита от плохой сети
-RUN npm config set registry https://registry.npmmirror.com \
+RUN npm config set registry https://registry.npmjs.org \
     && npm config set fetch-retries 5 \
     && npm config set fetch-retry-mintimeout 20000 \
     && npm config set fetch-retry-maxtimeout 600000 \
