@@ -1,3 +1,8 @@
+import os
+# Must be set before any app module is imported, because database.py reads
+# DATABASE_URL at module level and main.py calls create_all at module level.
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
