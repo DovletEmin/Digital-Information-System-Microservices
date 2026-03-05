@@ -6,7 +6,7 @@ $env:REDIS_URL = "redis://127.0.0.1:6379/0"
 $env:JWT_SECRET = "your-secret-key-here-change-in-production"
 $env:API_GATEWAY_URL = "http://localhost:3000"
 
-Set-Location "C:\Users\Emin\Desktop\SMU-Microservices\services\content-service"
+Set-Location "C:\Users\user\Desktop\Digital-Information-System-Microservices\services\content-service"
 
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 python -m pip install -r requirements.txt

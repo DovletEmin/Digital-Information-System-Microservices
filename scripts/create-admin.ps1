@@ -4,12 +4,12 @@ Write-Host "=== SMU Admin User Creator ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Проверка, запущен ли auth-service
-$running = docker ps --format "{{.Names}}" | Select-String "smu-auth-service"
-if (-not $running) {
-    Write-Host "Error: auth-service is not running" -ForegroundColor Red
-    Write-Host "Please start it with: docker-compose up auth-service" -ForegroundColor Yellow
-    exit 1
-}
+# $running = docker ps --format "{{.Names}}" | Select-String "smu-auth-service"
+# if (-not $running) {
+#     Write-Host "Error: auth-service is not running" -ForegroundColor Red
+#     Write-Host "Please start it with: docker-compose up auth-service" -ForegroundColor Yellow
+#     exit 1
+# }
 
 # Ввод данных
 $USERNAME = Read-Host "Enter username"

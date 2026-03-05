@@ -29,7 +29,15 @@ export default function BookReadPage() {
   // epub
   const [epubError, setEpubError] = useState<string | null>(null);
   const epubViewerRef = useRef<HTMLDivElement | null>(null);
-  const epubBlobUrlRef = useRef<string | null>(null);
+  // Use refs for epub instances to avoid triggering re-renders in cleanup effects
+  const epubRenditionRef = useRef<any>(null);
+  const epubBookRef = useRef<any>(null);
+  // Stores the saved progress % so loadEpubBook can restore position after locations generate
+  const savedEpubProgressRef = useRef<number>(0);
+  // Tracks whether the initial display is done — after that, relocated events = user navigation
+  const epubInitialDisplayDoneRef = useRef<boolean>(false);
+  const epubUserNavigatedRef = useRef<boolean>(false);
+  // Keep state versions only for things read in JSX
   const [epubRendition, setEpubRendition] = useState<any>(null);
   const [epubBookInstance, setEpubBookInstance] = useState<any>(null);
   const [totalEpubLocations, setTotalEpubLocations] = useState<number>(0);
@@ -101,7 +109,9 @@ export default function BookReadPage() {
 
   // computed urls
   const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
-  const proxyPdfUrl = book && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
+  // Only build proxyPdfUrl when the book actually has a pdf_file_url to avoid
+  // a spurious 404 probe request for epub-only books.
+  const proxyPdfUrl = book && book.pdf_file_url && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/read` : '';
   const proxyEpubUrl = book && bookId !== null && apiBaseUrl ? `${apiBaseUrl}/api/v1/books/${bookId}/epub` : '';
   const absolutePdfUrl = book?.pdf_file_url && /^https?:\/\//i.test(book.pdf_file_url) ? book.pdf_file_url : '';
   const absoluteEpubUrl = book?.epub_file_url && /^https?:\/\//i.test(book.epub_file_url) ? book.epub_file_url : '';
@@ -164,7 +174,10 @@ export default function BookReadPage() {
             setCurrentEpubLocationIndex(d.current_page);
           }
           if (d.progress_percentage && typeof d.progress_percentage === 'number') {
-            setEpubPercent(Math.round(d.progress_percentage));
+            const pct = Math.round(d.progress_percentage);
+            setEpubPercent(pct);
+            // Store for use inside loadEpubBook
+            savedEpubProgressRef.current = d.progress_percentage;
           }
         }
       } catch (e) {
@@ -314,91 +327,198 @@ export default function BookReadPage() {
     }
   }, [viewMode, authToken, bookId, currentPdfPage, totalPdfPages, currentTextPage, totalTextPages, currentEpubLocationIndex, totalEpubLocations, saveProgress]);
 
-  // EPUB loader (enhanced)
+  // EPUB loader — uses the two-step epub.js API to open a binary ArrayBuffer
+  // so epub.js NEVER makes HTTP requests for internal zip entries (META-INF/…)
   const loadEpubBook = useCallback(async () => {
-    if (typeof window === 'undefined' || (!book?.epub_file_url && !proxyEpubUrl && !absoluteEpubUrl)) return;
-    let createdBlobUrl: string | null = null;
+    if (typeof window === 'undefined') return;
+    const epubUrl = proxyEpubUrl || absoluteEpubUrl || book?.epub_file_url || '';
+    if (!epubUrl) { setEpubError('EPUB URL not available'); return; }
+
+    // Destroy any previous instance
+    try { epubRenditionRef.current?.destroy?.(); } catch { }
+    try { epubBookRef.current?.destroy?.(); } catch { }
+    epubRenditionRef.current = null;
+    epubBookRef.current = null;
+
+    setEpubError(null);
+    setReaderError(null);
+    setReaderLoading(true);
+
     try {
-      setEpubError(null);
-      setReaderError(null);
-      setReaderLoading(true);
+      // 0. Fetch progress directly here so we always have it, regardless of effect timing.
+      //    Use localStorage token directly — it's synchronously available, no React state needed.
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token && bookId !== null) {
+        try {
+          const pRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${bookId}/progress`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (pRes.ok) {
+            const pd = await pRes.json();
+            if (pd.progress_percentage && typeof pd.progress_percentage === 'number') {
+              savedEpubProgressRef.current = pd.progress_percentage;
+              setEpubPercent(Math.round(pd.progress_percentage));
+            }
+          }
+        } catch { /* progress fetch failure is non-fatal */ }
+      }
+
+      // 1. Fetch the EPUB file as a binary ArrayBuffer
+      const resp = await fetch(epubUrl, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching EPUB`);
+      const arrayBuffer = await resp.arrayBuffer();
+
+      // 2. Create an empty Book and open the buffer as 'binary'
+      //    This keeps all zip parsing in-memory — no HTTP requests for paths
+      //    like META-INF/container.xml which caused 404s against the dev server.
       const ePub = (await import('epubjs')).default;
-      // prefer proxied EPUB via API gateway for same-origin/CORS safety
-      const epubUrl = proxyEpubUrl || absoluteEpubUrl || book.epub_file_url;
-
-      const fetchHeaders: Record<string, string> = {};
-      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
-      const resp = await fetch(epubUrl, { method: 'GET', headers: fetchHeaders });
-      if (!resp.ok) throw new Error(`Failed to fetch EPUB: ${resp.status}`);
-      const ab = await resp.arrayBuffer();
-
-      // Create blob URL (most compatible) and initialize epub.js with it.
-      const blob = new Blob([ab], { type: resp.headers.get('content-type') || 'application/epub+zip' });
-      const blobUrl = URL.createObjectURL(blob);
-      createdBlobUrl = blobUrl;
-      epubBlobUrlRef.current = blobUrl;
-
-      const bookInstance = ePub(blobUrl);
-      try { await bookInstance.ready; } catch (e) { /* ignore */ }
-      try { await bookInstance.locations.generate(1200); } catch (e) { /* ignore */ }
-      const totalLoc = (bookInstance.locations && typeof bookInstance.locations.length === 'function') ? bookInstance.locations.length() : 0;
-      setTotalEpubLocations(totalLoc || 0);
+      const bookInstance = ePub();
+      await bookInstance.open(arrayBuffer, 'binary');
+      epubBookRef.current = bookInstance;
       setEpubBookInstance(bookInstance);
 
-      if (epubViewerRef.current) {
-        epubViewerRef.current.innerHTML = '';
-        const rendition = bookInstance.renderTo(epubViewerRef.current, { width: '100%', height: '100%', spread: 'none' });
-        rendition.on('relocated', (location: any) => {
-          try {
-            const cfi = location?.start?.cfi;
-            let pct = 0;
-            if (bookInstance.locations && cfi && typeof bookInstance.locations.percentageFromCfi === 'function') {
-              pct = bookInstance.locations.percentageFromCfi(cfi) || 0;
-            }
-            const percent = Math.max(0, Math.min(100, Math.round(pct * 100)));
-            setEpubPercent(percent);
-            if (totalLoc && typeof totalLoc === 'number') {
-              setCurrentEpubLocationIndex(Math.max(1, Math.round(pct * totalLoc)));
-            }
-          } catch (e) { console.warn('relocated handler error', e); }
-        });
+      // 3. Render into the container
+      if (!epubViewerRef.current) throw new Error('EPUB container not mounted');
+      epubViewerRef.current.innerHTML = '';
+      // scrolled-doc flow: epub.js expands the iframe vertically to fit the full
+      // chapter — no fixed height needed. Width must be real pixels.
+      const containerWidth = epubViewerRef.current.clientWidth || 860;
+      const rendition = bookInstance.renderTo(epubViewerRef.current, {
+        width: containerWidth,
+        height: 900,
+        spread: 'none',
+        flow: 'scrolled-doc',
+        manager: 'continuous',
+        allowScriptedContent: true,
+      });
 
+      // Inject comfortable reading styles into every chapter iframe
+      rendition.themes.default({
+        body: {
+          'font-family': 'Georgia, "Times New Roman", serif',
+          'font-size': '18px',
+          'line-height': '1.8',
+          'max-width': '720px',
+          'margin': '0 auto',
+          'padding': '32px 24px',
+          'color': '#1a1a1a',
+          'word-break': 'break-word',
+        },
+        img: { 'max-width': '100%', height: 'auto', display: 'block', margin: '16px auto' },
+        p: { 'margin-bottom': '1em' },
+        h1: { 'font-size': '2em', 'margin-bottom': '0.5em' },
+        h2: { 'font-size': '1.5em', 'margin-bottom': '0.5em' },
+        h3: { 'font-size': '1.25em', 'margin-bottom': '0.5em' },
+      });
+      epubRenditionRef.current = rendition;
+      setEpubRendition(rendition);
+
+      // Reset navigation flags for this load
+      epubInitialDisplayDoneRef.current = false;
+      epubUserNavigatedRef.current = false;
+
+      // 4. Track position changes
+      rendition.on('relocated', (location: any) => {
+        if (epubInitialDisplayDoneRef.current) {
+          epubUserNavigatedRef.current = true;
+        }
+        // If locations aren't generated yet, skip — don't overwrite the server-loaded percent with 0
+        const total = typeof bookInstance.locations?.length === 'function' ? bookInstance.locations.length() : 0;
+        if (total === 0) return;
+        try {
+          const cfi = location?.start?.cfi;
+          let pct = 0;
+          if (bookInstance.locations?.percentageFromCfi && cfi) {
+            pct = bookInstance.locations.percentageFromCfi(cfi) || 0;
+          }
+          const percent = Math.max(0, Math.min(100, Math.round(pct * 100)));
+          setEpubPercent(percent);
+          setCurrentEpubLocationIndex(Math.max(1, Math.round(pct * total)));
+        } catch { }
+      });
+
+      // 5. Start location generation in parallel — don't await it so display is immediate.
+      //    Use chunk=1600 (chars per location) — good balance of speed vs granularity.
+      const locationsPromise = bookInstance.locations.generate(1600);
+
+      // 6. Display: restore saved position if we have one, otherwise show first page
+      const savedPct = savedEpubProgressRef.current;
+      if (savedPct > 0) {
+        // Try spine-based jump: open the chapter closest to the saved percentage
+        try {
+          const spineItems = (bookInstance.spine as any)?.items || [];
+          if (spineItems.length > 0) {
+            const targetIdx = Math.min(
+              spineItems.length - 1,
+              Math.floor((savedPct / 100) * spineItems.length)
+            );
+            await rendition.display(spineItems[targetIdx]?.href || undefined);
+          } else {
+            await rendition.display();
+          }
+        } catch {
+          await rendition.display();
+        }
+      } else {
         await rendition.display();
-        setEpubRendition(rendition);
-        setReaderLoading(false);
       }
+      // Mark initial restore as done — from now on, any navigation is the user's choice
+      epubInitialDisplayDoneRef.current = true;
+      setReaderLoading(false);
+
+      // 7. After locations are ready: precise CFI restore if user hasn't navigated away, else recalc current %.
+      locationsPromise.then(() => {
+        const total = typeof bookInstance.locations?.length === 'function' ? bookInstance.locations.length() : 0;
+        setTotalEpubLocations(total);
+        if (total === 0) return;
+
+        const savedPct = savedEpubProgressRef.current;
+        if (!epubUserNavigatedRef.current && savedPct > 0) {
+          // User hasn't moved — jump to the precise CFI position now that we have locations
+          try {
+            const targetCfi = bookInstance.locations.cfiFromPercentage(savedPct / 100);
+            if (targetCfi) {
+              rendition.display(targetCfi).catch(() => {});
+              return; // 'relocated' will fire and update percent accurately
+            }
+          } catch { }
+        }
+
+        // Either user navigated or no saved position — just recalc % for current location
+        try {
+          const loc = epubRenditionRef.current?.currentLocation?.();
+          const cfi = loc?.start?.cfi;
+          if (cfi && bookInstance.locations?.percentageFromCfi) {
+            const pct = bookInstance.locations.percentageFromCfi(cfi) || 0;
+            setEpubPercent(Math.round(pct * 100));
+            setCurrentEpubLocationIndex(Math.max(1, Math.round(pct * total)));
+          }
+        } catch { }
+      }).catch(() => { });
+
     } catch (err: any) {
-      console.error('Failed to load EPUB', err);
+      console.error('EPUB load failed:', err);
       const msg = err?.message || String(err);
       setEpubError(msg);
       setReaderError(`EPUB load error: ${msg}`);
       setReaderLoading(false);
-    } finally {
-      // Revoke blob URL when component unmounts or next load happens - keep it for rendering lifetime
-      // We'll revoke on cleanup effect below when epubBookInstance changes/unmounts.
-      // If we created a blobUrl but did not set bookInstance, revoke immediately.
-      if (createdBlobUrl && !epubBookInstance) {
-        try { URL.revokeObjectURL(createdBlobUrl); } catch (e) {}
-      }
     }
-  }, [book, proxyEpubUrl, absoluteEpubUrl, authToken]);
+  }, [book?.epub_file_url, proxyEpubUrl, absoluteEpubUrl, authToken, bookId]);
 
-  // auto-load EPUB when viewMode is epub
+  // Auto-load EPUB when switching to epub mode
   useEffect(() => {
     if (viewMode === 'epub') loadEpubBook();
-  }, [viewMode, loadEpubBook]);
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // cleanup blob URL and epub instances on unmount or when book changes
+  // Cleanup epub instances on unmount
   useEffect(() => {
     return () => {
-      if (epubBlobUrlRef.current) {
-        try { URL.revokeObjectURL(epubBlobUrlRef.current); } catch (e) {}
-        epubBlobUrlRef.current = null;
-      }
-      try { epubRendition && typeof epubRendition.destroy === 'function' && epubRendition.destroy(); } catch (e) {}
-      try { epubBookInstance && typeof epubBookInstance.destroy === 'function' && epubBookInstance.destroy(); } catch (e) {}
+      try { epubRenditionRef.current?.destroy?.(); } catch { }
+      try { epubBookRef.current?.destroy?.(); } catch { }
     };
-  }, [epubBookInstance, epubRendition]);
+  }, []);
 
   // Open preferred format (PDF -> EPUB -> Text)
   const openPreferred = useCallback(() => {
@@ -569,13 +689,13 @@ export default function BookReadPage() {
             {/* footer removed per design */}
           </div>
         ) : viewMode === 'epub' ? (
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 mx-auto max-w-4xl">
             <div className="p-4">
               <div className="flex items-center justify-between mb-3 gap-3">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { try { epubRendition?.prev(); } catch (e) {} }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Previous page"><ChevronLeft size={18} /></button>
-                  <button onClick={() => { try { epubRendition?.next(); } catch (e) {} }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Next page"><ChevronRight size={18} /></button>
-                  <div className="text-sm text-gray-700 ml-3">{totalEpubLocations > 0 ? `Page ${currentEpubLocationIndex} / ${totalEpubLocations}` : `${epubPercent}%`}</div>
+                  <button onClick={() => { try { epubRenditionRef.current?.prev(); } catch { } }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Previous chapter"><ChevronLeft size={18} /></button>
+                  <button onClick={() => { try { epubRenditionRef.current?.next(); } catch { } }} className="px-3 py-2 bg-white border rounded-lg hover:bg-gray-50" aria-label="Next chapter"><ChevronRight size={18} /></button>
+                  <div className="text-sm text-gray-700 ml-3">{totalEpubLocations > 0 ? `${epubPercent}%` : `${epubPercent}%`}</div>
                 </div>
               </div>
 
@@ -596,11 +716,11 @@ export default function BookReadPage() {
                       setCurrentEpubLocationIndex(v);
                       try {
                         const pct = totalEpubLocations > 0 ? (v / totalEpubLocations) : 0;
-                        const cfi = epubBookInstance?.locations && typeof epubBookInstance.locations.cfiFromPercentage === 'function'
-                          ? epubBookInstance.locations.cfiFromPercentage(pct)
+                        const cfi = epubBookRef.current?.locations && typeof epubBookRef.current.locations.cfiFromPercentage === 'function'
+                          ? epubBookRef.current.locations.cfiFromPercentage(pct)
                           : null;
-                        if (cfi && epubRendition) await epubRendition.display(cfi);
-                      } catch (e) {}
+                        if (cfi && epubRenditionRef.current) await epubRenditionRef.current.display(cfi);
+                      } catch { }
                     }}
                     onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragGlobalPage(v); setCurrentEpubLocationIndex(v); }}
                     onMouseDown={() => { setIsDragging(true); setDragGlobalPage(currentEpubLocationIndex); }}
@@ -623,11 +743,11 @@ export default function BookReadPage() {
                       setEpubPercent(v);
                       try {
                         const pct = v / 100;
-                        const cfi = epubBookInstance?.locations && typeof epubBookInstance.locations.cfiFromPercentage === 'function'
-                          ? epubBookInstance.locations.cfiFromPercentage(pct)
+                        const cfi = epubBookRef.current?.locations && typeof epubBookRef.current.locations.cfiFromPercentage === 'function'
+                          ? epubBookRef.current.locations.cfiFromPercentage(pct)
                           : null;
-                        if (cfi && epubRendition) await epubRendition.display(cfi);
-                      } catch (e) {}
+                        if (cfi && epubRenditionRef.current) await epubRenditionRef.current.display(cfi);
+                      } catch { }
                     }}
                     onInput={(e) => { const v = Number((e.target as HTMLInputElement).value); setDragGlobalPage(v); setEpubPercent(v); }}
                     onMouseDown={() => { setIsDragging(true); setDragGlobalPage(epubPercent); }}
@@ -646,12 +766,20 @@ export default function BookReadPage() {
                   <p className="mb-4">{epubError}</p>
                   <div className="flex justify-center gap-3">
                     <button onClick={() => { setEpubError(null); loadEpubBook(); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
-                    <a href={book?.pdf_file_url || '#'} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Open original</a>
-                    <button onClick={() => router.push(`/books/${bookId}`)} className="px-4 py-2 bg-white text-gray-700 border rounded-lg">Back</button>
                   </div>
                 </div>
               ) : (
-                <div ref={epubViewerRef} style={{ minHeight: 400 }} />
+                <div
+                  ref={epubViewerRef}
+                  style={{
+                    width: '100%',
+                    minHeight: '80vh',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    position: 'relative',
+                    background: '#fff',
+                  }}
+                />
               )}
             </div>
           </div>

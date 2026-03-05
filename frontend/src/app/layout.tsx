@@ -9,6 +9,7 @@ import Script from 'next/script';
 export const metadata: Metadata = {
   title: "SMU - Sanly maglumatlar ulgamy",
   description: "Türkmenistanyň ylmy makalalar, dissertasiýalar we kitaplar kitaphanasy",
+  icons: { icon: '/favicon.svg' },
 };
 
 export default function RootLayout({

@@ -8,7 +8,7 @@ $env:MINIO_USE_SSL = "false"
 $env:MINIO_BUCKET = "media"
 $env:PORT = "8005"
 
-Set-Location "C:\Users\Emin\Desktop\SMU-Microservices\services\media-service"
+Set-Location "C:\Users\user\Desktop\Digital-Information-System-Microservices\services\media-service"
 
 Write-Host "Building and running..." -ForegroundColor Yellow
 go run main.go
