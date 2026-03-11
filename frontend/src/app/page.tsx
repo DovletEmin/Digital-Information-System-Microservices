@@ -35,9 +35,6 @@ export default function HomePage() {
   }, [page, selectedCategory, languageFilter]);
 
   const attachRatings = async (items: Article[]) => {
-    const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('token')) : null;
-    if (!token) return items;
-
     const stats = await Promise.all(
       items.map((item) => ratingService.getStats('article', item.id).catch(() => null))
     );

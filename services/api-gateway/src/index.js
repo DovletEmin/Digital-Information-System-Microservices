@@ -559,7 +559,7 @@ app.use('/api/v1/bookmarks', authMiddleware, createProxyMiddleware({
 }));
 
 // Ratings - /api/v1/ratings
-app.use('/api/v1/ratings', authMiddleware, createProxyMiddleware({
+app.use('/api/v1/ratings', requireAuthForMutations, createProxyMiddleware({
   target: services.activity,
   pathRewrite: { '^/api/v1/ratings': '/api/v1/ratings' },
   changeOrigin: true,
