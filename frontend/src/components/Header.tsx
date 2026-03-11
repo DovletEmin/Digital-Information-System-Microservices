@@ -1,55 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bookmark, LogOut } from 'lucide-react';
 import { authService } from '@/services/authService';
-import { User } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Header() {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, clearUser } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    const syncUser = () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      if (!token) {
-        setUser(null);
-        return;
-      }
-
-      authService
-        .me()
-        .then(setUser)
-        .catch(() => {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          setUser(null);
-        });
-    };
-
-    syncUser();
-
-    const handleAuthChange = () => syncUser();
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'access_token' || event.key === 'refresh_token') {
-        syncUser();
-      }
-    };
-
-    window.addEventListener('auth-change', handleAuthChange as EventListener);
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      window.removeEventListener('auth-change', handleAuthChange as EventListener);
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
 
   const handleLogout = async () => {
     await authService.logout();
-    setUser(null);
+    clearUser();
   };
 
   const handleBookmarksClick = () => {
