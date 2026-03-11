@@ -11,13 +11,13 @@ export default function Footer() {
             <Link href="/about" className="hover:text-primary transition-colors">
               Biz barada
             </Link>
-            <Link href="/contact" className="hover:text-primary transition-colors">
+            <Link href="/terms" className="hover:text-primary transition-colors">
               Şert we düzgünler
             </Link>
-            <Link href="/terms" className="hover:text-primary transition-colors">
+            <Link href="/privacy" className="hover:text-primary transition-colors">
               Gizlinlik Syýasaty
             </Link>
-            <Link href="/privacy" className="hover:text-primary transition-colors">
+            <Link href="/contact" className="hover:text-primary transition-colors">
               Habarlaşmak
             </Link>
           </div>

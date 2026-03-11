@@ -344,14 +344,14 @@ export default function ArticlePage() {
             {article.publication_date && (
               <>
                 <span>|</span>
-                <div className="flex items-center gap-1">
-                  <Eye size={16} />
-                  {article.views}
-                </div>
-                <span>|</span>
                 <div>{formatDate(article.publication_date)}</div>
               </>
             )}
+            <span>|</span>
+            <div className="flex items-center gap-1">
+              <Eye size={16} />
+              {article.views}
+            </div>
             {article.categories && article.categories.length > 0 && (
               <>
                 <span>|</span>

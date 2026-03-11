@@ -28,6 +28,10 @@ export default function DissertationsPage() {
   const [typeFilter, setTypeFilter] = useState<'local' | 'foreign' | null>(null);
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
+  const [pendingLanguageFilter, setPendingLanguageFilter] = useState<'tm' | 'ru' | 'en' | null>(null);
+  const [pendingTypeFilter, setPendingTypeFilter] = useState<'local' | 'foreign' | null>(null);
+  const [pendingYearFrom, setPendingYearFrom] = useState<number | null>(null);
+  const [pendingYearTo, setPendingYearTo] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -98,7 +102,7 @@ export default function DissertationsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const filters: Record<string, any> = {};
+      const filters: Record<string, any> = { sort: 'views_desc' };
       if (selectedCategory) filters.category_id = selectedCategory;
       if (languageFilter) filters.language = languageFilter;
 
@@ -262,7 +266,7 @@ export default function DissertationsPage() {
               type="button"
               className="p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               aria-label="Filters"
-              onClick={() => setShowFilters(true)}
+              onClick={openFilters}
             >
               <SlidersHorizontal size={20} className="text-gray-600" />
             </button>
@@ -485,9 +489,9 @@ export default function DissertationsPage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setLanguageFilter(languageFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingLanguageFilter(pendingLanguageFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        languageFilter === item.value
+                        pendingLanguageFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -507,9 +511,9 @@ export default function DissertationsPage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setTypeFilter(typeFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingTypeFilter(pendingTypeFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        typeFilter === item.value
+                        pendingTypeFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -527,8 +531,8 @@ export default function DissertationsPage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2000"
-                    value={yearFrom ?? ''}
-                    onChange={(e) => setYearFrom(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearFrom ?? ''}
+                    onChange={(e) => setPendingYearFrom(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-dan</span>
@@ -536,8 +540,8 @@ export default function DissertationsPage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2010"
-                    value={yearTo ?? ''}
-                    onChange={(e) => setYearTo(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearTo ?? ''}
+                    onChange={(e) => setPendingYearTo(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-çenli</span>
@@ -548,10 +552,10 @@ export default function DissertationsPage() {
             <div className="mt-6 flex items-center justify-between border-t pt-4">
               <button
                 onClick={() => {
-                  setLanguageFilter(null);
-                  setTypeFilter(null);
-                  setYearFrom(null);
-                  setYearTo(null);
+                  setPendingLanguageFilter(null);
+                  setPendingTypeFilter(null);
+                  setPendingYearFrom(null);
+                  setPendingYearTo(null);
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
@@ -566,7 +570,13 @@ export default function DissertationsPage() {
                   Goýbolsun et
                 </button>
                 <button
-                  onClick={() => setShowFilters(false)}
+                  onClick={() => {
+                    setLanguageFilter(pendingLanguageFilter);
+                    setTypeFilter(pendingTypeFilter);
+                    setYearFrom(pendingYearFrom);
+                    setYearTo(pendingYearTo);
+                    setShowFilters(false);
+                  }}
                   className="px-4 py-2 text-sm rounded-full bg-gray-900 text-white hover:bg-gray-800"
                 >
                   Ýatda sakla

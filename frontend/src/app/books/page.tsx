@@ -13,6 +13,10 @@ export default function BooksPage() {
   const [latestBooks, setLatestBooks] = useState<Book[]>([]);
   const [mostViewedBooks, setMostViewedBooks] = useState<Book[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [pendingLanguageFilter, setPendingLanguageFilter] = useState<'tm' | 'ru' | 'en' | null>(null);
+  const [pendingTypeFilter, setPendingTypeFilter] = useState<'local' | 'foreign' | null>(null);
+  const [pendingYearFrom, setPendingYearFrom] = useState<number | null>(null);
+  const [pendingYearTo, setPendingYearTo] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -47,22 +51,22 @@ export default function BooksPage() {
     });
   };
 
-  const fetchData = async () => {
+  const fetchData = async (searchQuery?: string) => {
     try {
       setLoading(true);
-      const [latestData, mostViewedData, categoriesData] = await Promise.all([
-        bookService.getLatest(14),
-        bookService.getMostViewed(14),
+      const filters: Record<string, any> = {};
+      if (selectedCategory) filters.category_id = selectedCategory;
+      if (languageFilter) filters.language = languageFilter;
+      if (searchQuery?.trim()) filters.search = searchQuery.trim();
+
+      const [data, categoriesData] = await Promise.all([
+        bookService.getLatest(28, filters),
         categoryService.getBookCategories(),
       ]);
 
-      const [latestWithRatings, mostViewedWithRatings] = await Promise.all([
-        attachRatings(latestData),
-        attachRatings(mostViewedData),
-      ]);
-
-      setLatestBooks(latestWithRatings);
-      setMostViewedBooks(mostViewedWithRatings);
+      const allWithRatings = await attachRatings(data);
+      setLatestBooks(allWithRatings.slice(0, 14));
+      setMostViewedBooks([...allWithRatings].sort((a, b) => b.views - a.views).slice(0, 14));
       setCategories(categoriesData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -73,6 +77,13 @@ export default function BooksPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    fetchData(search);
+  };  const openFilters = () => {
+    setPendingLanguageFilter(languageFilter);
+    setPendingTypeFilter(typeFilter);
+    setPendingYearFrom(yearFrom);
+    setPendingYearTo(yearTo);
+    setShowFilters(true);
   };
 
   const normalizeLanguage = (value?: string) => (value || '').toLowerCase();
@@ -186,7 +197,7 @@ export default function BooksPage() {
               type="button"
               className="p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               aria-label="Filters"
-              onClick={() => setShowFilters(true)}
+              onClick={openFilters}
             >
               <SlidersHorizontal size={20} className="text-gray-600" />
             </button>
@@ -370,9 +381,9 @@ export default function BooksPage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setLanguageFilter(languageFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingLanguageFilter(pendingLanguageFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        languageFilter === item.value
+                        pendingLanguageFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -392,9 +403,9 @@ export default function BooksPage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setTypeFilter(typeFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingTypeFilter(pendingTypeFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        typeFilter === item.value
+                        pendingTypeFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -412,8 +423,8 @@ export default function BooksPage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2000"
-                    value={yearFrom ?? ''}
-                    onChange={(e) => setYearFrom(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearFrom ?? ''}
+                    onChange={(e) => setPendingYearFrom(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-dan</span>
@@ -421,8 +432,8 @@ export default function BooksPage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2010"
-                    value={yearTo ?? ''}
-                    onChange={(e) => setYearTo(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearTo ?? ''}
+                    onChange={(e) => setPendingYearTo(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-çenli</span>
@@ -433,10 +444,10 @@ export default function BooksPage() {
             <div className="mt-6 flex items-center justify-between border-t pt-4">
               <button
                 onClick={() => {
-                  setLanguageFilter(null);
-                  setTypeFilter(null);
-                  setYearFrom(null);
-                  setYearTo(null);
+                  setPendingLanguageFilter(null);
+                  setPendingTypeFilter(null);
+                  setPendingYearFrom(null);
+                  setPendingYearTo(null);
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
@@ -451,7 +462,13 @@ export default function BooksPage() {
                   Göýbolsun et
                 </button>
                 <button
-                  onClick={() => setShowFilters(false)}
+                  onClick={() => {
+                    setLanguageFilter(pendingLanguageFilter);
+                    setTypeFilter(pendingTypeFilter);
+                    setYearFrom(pendingYearFrom);
+                    setYearTo(pendingYearTo);
+                    setShowFilters(false);
+                  }}
                   className="px-4 py-2 text-sm rounded-full bg-gray-900 text-white hover:bg-gray-800"
                 >
                   Ýatda sakla

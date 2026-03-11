@@ -56,7 +56,7 @@ export default function RegisterPage() {
               value={form.username}
               onChange={onChange}
               required
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
             />
           </div>
 
@@ -68,7 +68,7 @@ export default function RegisterPage() {
               value={form.email}
               onChange={onChange}
               required
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
             />
           </div>
 
@@ -80,7 +80,7 @@ export default function RegisterPage() {
                 name="first_name"
                 value={form.first_name}
                 onChange={onChange}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
               />
             </div>
             <div>
@@ -90,7 +90,7 @@ export default function RegisterPage() {
                 name="last_name"
                 value={form.last_name}
                 onChange={onChange}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
               />
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function RegisterPage() {
               onChange={onChange}
               required
               minLength={6}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
             />
           </div>
 
