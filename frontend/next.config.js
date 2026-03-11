@@ -2,7 +2,12 @@
 const nextConfig = {
   output: 'standalone',
   images: {
-    domains: ['localhost', '172.23.84.117', '192.168.55.156'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost', port: '', pathname: '/**' },
+      { protocol: 'http', hostname: '172.23.84.117', port: '', pathname: '/**' },
+      { protocol: 'http', hostname: '**', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: '**', port: '', pathname: '/**' },
+    ],
     unoptimized: true
   },
   webpack: (config, { isServer }) => {
