@@ -24,13 +24,9 @@ export const bookService = {
     return response.data;
   },
 
-  getLatest: async (limit = 10): Promise<Book[]> => {
-    const response = await api.get(`/api/v1/books?page=1&per_page=${limit}`);
+  getLatest: async (limit = 10, filters?: Record<string, any>): Promise<Book[]> => {
+    const params = new URLSearchParams({ page: '1', per_page: limit.toString(), ...filters });
+    const response = await api.get(`/api/v1/books?${params}`);
     return response.data.items;
-  },
-
-  getMostViewed: async (limit = 10): Promise<Book[]> => {
-    const response = await api.get(`/api/v1/books?page=1&per_page=${limit}`);
-    return response.data.items.sort((a: Book, b: Book) => b.views - a.views);
   },
 };

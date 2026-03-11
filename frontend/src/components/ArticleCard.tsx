@@ -9,12 +9,17 @@ import { savedService } from '@/services/savedService';
 
 interface ArticleCardProps {
   article: Article;
+  isSaved?: boolean;
+  onSaveToggle?: (newState: boolean) => void;
 }
 
-export default function ArticleCard({ article }: ArticleCardProps) {
+export default function ArticleCard({ article, isSaved: isSavedProp, onSaveToggle }: ArticleCardProps) {
   const router = useRouter();
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSavedInternal, setIsSavedInternal] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Use prop if provided, otherwise use internal state
+  const isSaved = isSavedProp !== undefined ? isSavedProp : isSavedInternal;
 
   useEffect(() => {
     const syncToken = () => {
@@ -41,16 +46,19 @@ export default function ArticleCard({ article }: ArticleCardProps) {
   }, []);
 
   useEffect(() => {
+    // Only fetch individually if we're not using prop-based state
+    if (isSavedProp !== undefined) return;
+
     if (!authToken) {
-      setIsSaved(false);
+      setIsSavedInternal(false);
       return;
     }
 
     savedService
       .checkIfSaved(article.id)
-      .then(setIsSaved)
+      .then(setIsSavedInternal)
       .catch(() => {});
-  }, [article.id, authToken]);
+  }, [article.id, authToken, isSavedProp]);
 
   const handleSave = async (event: React.MouseEvent) => {
     event.preventDefault();
@@ -65,10 +73,12 @@ export default function ArticleCard({ article }: ArticleCardProps) {
     try {
       if (isSaved) {
         await savedService.unsaveArticle(article.id);
-        setIsSaved(false);
+        if (onSaveToggle) onSaveToggle(false);
+        else setIsSavedInternal(false);
       } else {
         await savedService.saveArticle(article.id);
-        setIsSaved(true);
+        if (onSaveToggle) onSaveToggle(true);
+        else setIsSavedInternal(true);
       }
     } catch {
       // ignore

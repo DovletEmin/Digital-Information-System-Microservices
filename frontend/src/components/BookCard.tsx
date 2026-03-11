@@ -1,21 +1,35 @@
+'use client';
+
+import Image from 'next/image';
 import { Book } from '@/types';
 import Link from 'next/link';
+import { Bookmark } from 'lucide-react';
 
 interface BookCardProps {
   book: Book;
+  isSaved?: boolean;
+  onSaveToggle?: (newState: boolean) => void;
 }
 
-export default function BookCard({ book }: BookCardProps) {
+export default function BookCard({ book, isSaved, onSaveToggle }: BookCardProps) {
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onSaveToggle) onSaveToggle(!isSaved);
+  };
+
   return (
     <Link href={`/books/${book.id}`}>
       <div className="group cursor-pointer">
         {/* Book Cover */}
         <div className="relative w-full aspect-[2/3] overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow bg-gray-100">
           {book.thumbnail ? (
-            <img
+            <Image
               src={book.thumbnail}
               alt={book.title}
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 16vw"
+              className="object-cover"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
@@ -23,6 +37,17 @@ export default function BookCard({ book }: BookCardProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
+          )}
+          {onSaveToggle !== undefined && (
+            <button
+              onClick={handleSaveClick}
+              className={`absolute top-2 right-2 p-1.5 rounded-full shadow transition-colors ${
+                isSaved ? 'bg-primary text-white' : 'bg-white/80 text-gray-700 hover:bg-white'
+              }`}
+              aria-label={isSaved ? 'Remove from saved' : 'Save'}
+            >
+              <Bookmark size={14} />
+            </button>
           )}
         </div>
 
@@ -42,3 +67,4 @@ export default function BookCard({ book }: BookCardProps) {
     </Link>
   );
 }
+

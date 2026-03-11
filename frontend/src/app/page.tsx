@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { articleService } from '@/services/articleService';
 import { categoryService } from '@/services/categoryService';
 import { ratingService } from '@/services/ratingService';
+import { savedService } from '@/services/savedService';
 import { Article, Category } from '@/types';
 import ArticleCard from '@/components/ArticleCard';
 
@@ -23,6 +24,11 @@ export default function HomePage() {
   const [typeFilter, setTypeFilter] = useState<'local' | 'foreign' | null>(null);
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
+  const [pendingLanguageFilter, setPendingLanguageFilter] = useState<'tm' | 'ru' | 'en' | null>(null);
+  const [pendingTypeFilter, setPendingTypeFilter] = useState<'local' | 'foreign' | null>(null);
+  const [pendingYearFrom, setPendingYearFrom] = useState<number | null>(null);
+  const [pendingYearTo, setPendingYearTo] = useState<number | null>(null);
+  const [savedArticleIds, setSavedArticleIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -50,7 +56,7 @@ export default function HomePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const articleFilters: Parameters<typeof articleService.getAll>[2] = {};
+      const articleFilters: Parameters<typeof articleService.getAll>[2] = { sort: 'views_desc' };
       if (selectedCategory) articleFilters.category_id = selectedCategory;
       if (languageFilter) articleFilters.language = languageFilter;
 
@@ -63,6 +69,19 @@ export default function HomePage() {
       setArticles(itemsWithRatings);
       setTotalPages(articlesData.pages);
       setCategories(categoriesData);
+
+      // Batch-fetch saved IDs in one request instead of N per-card calls
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token) {
+        try {
+          const savedData = await savedService.getSavedArticles(1, 200);
+          setSavedArticleIds(new Set(savedData.items.map((a: { id: number }) => a.id)));
+        } catch {
+          setSavedArticleIds(new Set());
+        }
+      } else {
+        setSavedArticleIds(new Set());
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -74,7 +93,10 @@ export default function HomePage() {
     e.preventDefault();
     try {
       setLoading(true);
-      const data = await articleService.getAll(1, 10, { search, category_id: selectedCategory || undefined });
+      const filters: Parameters<typeof articleService.getAll>[2] = { search };
+      if (selectedCategory) filters.category_id = selectedCategory;
+      if (languageFilter) filters.language = languageFilter;
+      const data = await articleService.getAll(1, 10, filters);
       const itemsWithRatings = await attachRatings(data.items);
       setArticles(itemsWithRatings);
       setPage(1);
@@ -84,6 +106,14 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openFilters = () => {
+    setPendingLanguageFilter(languageFilter);
+    setPendingTypeFilter(typeFilter);
+    setPendingYearFrom(yearFrom);
+    setPendingYearTo(yearTo);
+    setShowFilters(true);
   };
 
   const normalizeLanguage = (value?: string) => (value || '').toLowerCase();
@@ -167,7 +197,7 @@ export default function HomePage() {
               type="button"
               className="p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               aria-label="Filters"
-              onClick={() => setShowFilters(true)}
+              onClick={openFilters}
             >
               <SlidersHorizontal size={20} className="text-gray-600" />
             </button>
@@ -254,7 +284,19 @@ export default function HomePage() {
           ) : (
             <div className="space-y-10">
               {filteredArticles.map((article) => (
-                <ArticleCard key={article.id} article={article} />
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  isSaved={savedArticleIds.has(article.id)}
+                  onSaveToggle={(newState) => {
+                    setSavedArticleIds((prev) => {
+                      const next = new Set(prev);
+                      if (newState) next.add(article.id);
+                      else next.delete(article.id);
+                      return next;
+                    });
+                  }}
+                />
               ))}
             </div>
           )}
@@ -299,9 +341,9 @@ export default function HomePage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setLanguageFilter(languageFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingLanguageFilter(pendingLanguageFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        languageFilter === item.value
+                        pendingLanguageFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -321,9 +363,9 @@ export default function HomePage() {
                   ].map((item) => (
                     <button
                       key={item.value}
-                      onClick={() => setTypeFilter(typeFilter === item.value ? null : item.value)}
+                      onClick={() => setPendingTypeFilter(pendingTypeFilter === item.value ? null : item.value)}
                       className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                        typeFilter === item.value
+                        pendingTypeFilter === item.value
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300'
                       }`}
@@ -341,8 +383,8 @@ export default function HomePage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2000"
-                    value={yearFrom ?? ''}
-                    onChange={(e) => setYearFrom(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearFrom ?? ''}
+                    onChange={(e) => setPendingYearFrom(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-dan</span>
@@ -350,8 +392,8 @@ export default function HomePage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="< 2010"
-                    value={yearTo ?? ''}
-                    onChange={(e) => setYearTo(e.target.value ? Number(e.target.value) : null)}
+                    value={pendingYearTo ?? ''}
+                    onChange={(e) => setPendingYearTo(e.target.value ? Number(e.target.value) : null)}
                     className="w-24 px-3 py-2 rounded-full border border-gray-300 text-sm"
                   />
                   <span>-çenli</span>
@@ -362,10 +404,10 @@ export default function HomePage() {
             <div className="mt-6 flex items-center justify-between border-t pt-4">
               <button
                 onClick={() => {
-                  setLanguageFilter(null);
-                  setTypeFilter(null);
-                  setYearFrom(null);
-                  setYearTo(null);
+                  setPendingLanguageFilter(null);
+                  setPendingTypeFilter(null);
+                  setPendingYearFrom(null);
+                  setPendingYearTo(null);
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
@@ -380,7 +422,13 @@ export default function HomePage() {
                   Goýbolsun et
                 </button>
                 <button
-                  onClick={() => setShowFilters(false)}
+                  onClick={() => {
+                    setLanguageFilter(pendingLanguageFilter);
+                    setTypeFilter(pendingTypeFilter);
+                    setYearFrom(pendingYearFrom);
+                    setYearTo(pendingYearTo);
+                    setShowFilters(false);
+                  }}
                   className="px-4 py-2 text-sm rounded-full bg-gray-900 text-white hover:bg-gray-800"
                 >
                   Ýatda sakla
