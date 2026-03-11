@@ -10,6 +10,7 @@ const bookmarkRoutes = require('./routes/bookmarks');
 const ratingRoutes = require('./routes/ratings');
 const viewRoutes = require('./routes/views');
 const authMiddleware = require('./middleware/auth');
+const optionalAuth = require('./middleware/optionalAuth');
 
 const app = express();
 const PORT = process.env.PORT || 8004;
@@ -60,7 +61,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/v1/bookmarks', authMiddleware, bookmarkRoutes);
-app.use('/api/v1/ratings', authMiddleware, ratingRoutes);
+app.use('/api/v1/ratings', optionalAuth, ratingRoutes);
 app.use('/api/v1/views', viewRoutes);
 
 // User stats endpoint
