@@ -24,14 +24,14 @@ export default function DissertationsPage() {
   const [activeTab, setActiveTab] = useState('dissertations');
   const [activeCategoryTab, setActiveCategoryTab] = useState('Awtoreferatlar');
   const [showFilters, setShowFilters] = useState(false);
-  const [languageFilter, setLanguageFilter] = useState<'tk' | 'ru' | 'en' | null>(null);
+  const [languageFilter, setLanguageFilter] = useState<'tm' | 'ru' | 'en' | null>(null);
   const [typeFilter, setTypeFilter] = useState<'local' | 'foreign' | null>(null);
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
-  }, [page, selectedCategory]);
+  }, [page, selectedCategory, languageFilter]);
 
   useEffect(() => {
     const syncToken = () => {
@@ -98,8 +98,12 @@ export default function DissertationsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const filters: Record<string, any> = {};
+      if (selectedCategory) filters.category_id = selectedCategory;
+      if (languageFilter) filters.language = languageFilter;
+
       const [dissertationsData, categoriesData] = await Promise.all([
-        dissertationService.getAll(page, 10, selectedCategory ? { category_id: selectedCategory } : {}),
+        dissertationService.getAll(page, 10, filters),
         categoryService.getDissertationCategories(),
       ]);
 
@@ -162,9 +166,9 @@ export default function DissertationsPage() {
   const matchesLanguage = (item: Dissertation) => {
     if (!languageFilter) return true;
     const lang = normalizeLanguage(item.language);
-    if (languageFilter === 'tk') return lang.includes('tk') || lang.includes('turkmen');
-    if (languageFilter === 'ru') return lang.includes('ru') || lang.includes('rus');
-    return lang.includes('en') || lang.includes('ing');
+    if (languageFilter === 'tm') return lang === 'tm' || lang.includes('turkmen') || lang.includes('türkmen') || lang === 'tk';
+    if (languageFilter === 'ru') return lang === 'ru' || lang.includes('rus');
+    return lang === 'en' || lang.includes('eng') || lang.includes('ing');
   };
 
   const matchesType = (item: Dissertation) => {
@@ -293,6 +297,16 @@ export default function DissertationsPage() {
 
         {/* Categories Section */}
         <div className="mb-10">
+          {selectedCategory !== null && (
+            <div className="mb-3">
+              <button
+                onClick={() => { setSelectedCategory(null); setPage(1); }}
+                className="text-xs text-red-500 hover:text-red-700 border border-red-300 hover:border-red-500 px-3 py-0.5 rounded-full transition-colors"
+              >
+                Ýatyrmak
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {activeCategories && activeCategories.length > 0 ? (
               <>
@@ -465,7 +479,7 @@ export default function DissertationsPage() {
                 <p className="text-sm font-medium text-gray-700 mb-2">Dili:</p>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { label: 'Türkmen dilinde', value: 'tk' as const },
+                    { label: 'Türkmen dilinde', value: 'tm' as const },
                     { label: 'Rus dilinde', value: 'ru' as const },
                     { label: 'Iňlis dilinde', value: 'en' as const },
                   ].map((item) => (
