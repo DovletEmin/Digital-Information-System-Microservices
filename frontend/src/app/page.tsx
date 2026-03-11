@@ -19,16 +19,19 @@ export default function HomePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [activeTab, setActiveTab] = useState('makalalar');
   const [showFilters, setShowFilters] = useState(false);
-  const [languageFilter, setLanguageFilter] = useState<'tk' | 'ru' | 'en' | null>(null);
+  const [languageFilter, setLanguageFilter] = useState<'tm' | 'ru' | 'en' | null>(null);
   const [typeFilter, setTypeFilter] = useState<'local' | 'foreign' | null>(null);
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
-  }, [page, selectedCategory]);
+  }, [page, selectedCategory, languageFilter]);
 
   const attachRatings = async (items: Article[]) => {
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('token')) : null;
+    if (!token) return items;
+
     const stats = await Promise.all(
       items.map((item) => ratingService.getStats('article', item.id).catch(() => null))
     );
@@ -47,8 +50,12 @@ export default function HomePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const articleFilters: Parameters<typeof articleService.getAll>[2] = {};
+      if (selectedCategory) articleFilters.category_id = selectedCategory;
+      if (languageFilter) articleFilters.language = languageFilter;
+
       const [articlesData, categoriesData] = await Promise.all([
-        articleService.getAll(page, 10, selectedCategory ? { category_id: selectedCategory } : undefined),
+        articleService.getAll(page, 10, articleFilters),
         categoryService.getArticleCategories(),
       ]);
 
@@ -84,9 +91,9 @@ export default function HomePage() {
   const matchesLanguage = (item: Article) => {
     if (!languageFilter) return true;
     const lang = normalizeLanguage(item.language);
-    if (languageFilter === 'tk') return lang.includes('tk') || lang.includes('turkmen');
-    if (languageFilter === 'ru') return lang.includes('ru') || lang.includes('rus');
-    return lang.includes('en') || lang.includes('ing');
+    if (languageFilter === 'tm') return lang === 'tm' || lang.includes('turkmen') || lang.includes('türkmen') || lang === 'tk';
+    if (languageFilter === 'ru') return lang === 'ru' || lang.includes('rus');
+    return lang === 'en' || lang.includes('eng') || lang.includes('ing');
   };
 
   const matchesType = (item: Article) => {
@@ -169,7 +176,17 @@ export default function HomePage() {
 
         {/* Categories Section */}
         <div className="mb-10">
-          <h2 className="text-sm text-gray-500 mb-4">Ýlmyň pudagy</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-sm text-gray-500">Ýlmyň pudagy</h2>
+            {selectedCategory !== null && (
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="text-xs text-red-500 hover:text-red-700 border border-red-300 hover:border-red-500 px-3 py-0.5 rounded-full transition-colors"
+              >
+                Ýatyrmak
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {categories.length > 0 ? (
               <>
@@ -276,7 +293,7 @@ export default function HomePage() {
                 <p className="text-sm font-medium text-gray-700 mb-2">Dili:</p>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { label: 'Türkmen dilinde', value: 'tk' as const },
+                    { label: 'Türkmen dilinde', value: 'tm' as const },
                     { label: 'Rus dilinde', value: 'ru' as const },
                     { label: 'Iňlis dilinde', value: 'en' as const },
                   ].map((item) => (
