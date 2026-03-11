@@ -29,6 +29,9 @@ export default function BooksPage() {
   }, []);
 
   const attachRatings = async (items: Book[]) => {
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('token')) : null;
+    if (!token) return items;
+
     const stats = await Promise.all(
       items.map((item) => ratingService.getStats('book', item.id).catch(() => null))
     );

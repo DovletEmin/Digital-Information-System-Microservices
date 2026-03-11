@@ -77,6 +77,9 @@ export default function DissertationsPage() {
   }, [dissertations, authToken]);
 
   const attachRatings = async (items: Dissertation[]) => {
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('token')) : null;
+    if (!token) return items;
+
     const stats = await Promise.all(
       items.map((item) => ratingService.getStats('dissertation', item.id).catch(() => null))
     );
