@@ -138,6 +138,14 @@ export default function DissertationsPage() {
     }
   };
 
+  const openFilters = () => {
+    setPendingLanguageFilter(languageFilter);
+    setPendingTypeFilter(typeFilter);
+    setPendingYearFrom(yearFrom);
+    setPendingYearTo(yearTo);
+    setShowFilters(true);
+  };
+
   const getActiveCategories = () => {
     const parentCategory = categories.find(cat => 
       !cat.parent_id && cat.name.toLowerCase() === activeCategoryTab.toLowerCase()
