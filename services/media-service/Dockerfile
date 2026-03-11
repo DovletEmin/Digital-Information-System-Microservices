@@ -7,7 +7,9 @@ WORKDIR /app
 COPY . .
 
 # Download dependencies and generate go.sum
-RUN go mod download && go mod tidy
+RUN go env -w GOPROXY=https://goproxy.io,direct \
+    && go mod download \
+    && go mod tidy
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o media-service .

@@ -21,9 +21,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./services/auth-service
-        run: |
-          go mod download
-          go install github.com/stretchr/testify@latest
+        run: go mod download
 
       - name: Run tests
         working-directory: ./services/auth-service

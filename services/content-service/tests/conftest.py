@@ -1,10 +1,16 @@
+import os
+# Must be set before any app module is imported, because database.py reads
+# DATABASE_URL at module level and main.py calls create_all at module level.
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+
 import pytest
+from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database import Base, get_db
 from main import app
-from models import Category, Article
+from models import ArticleCategory, Article
 
 # Test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -34,13 +40,13 @@ def db():
 
 
 @pytest.fixture
-def client():
+def client(db):
     return TestClient(app)
 
 
 @pytest.fixture
 def test_category(db):
-    category = Category(name_tm="Test TM", name_ru="Test RU", name_en="Test EN")
+    category = ArticleCategory(name="Test Category")
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -55,15 +61,15 @@ def test_article(db, test_category):
         authors_workplace="Test University",
         thumbnail="http://example.com/thumb.jpg",
         content="Test content",
-        publication_date="2024-01-01",
+        publication_date=datetime(2024, 1, 1),
         language="tm",
         type="local",
         views=0,
         rating=0.0,
         average_rating=0.0,
         rating_count=0,
-        category_id=test_category.id
     )
+    article.categories = [test_category]
     db.add(article)
     db.commit()
     db.refresh(article)

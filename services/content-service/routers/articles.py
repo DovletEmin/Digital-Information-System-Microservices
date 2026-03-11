@@ -14,6 +14,7 @@ async def list_articles(
     per_page: int = Query(20, ge=1, le=100),
     author: Optional[str] = None,
     language: Optional[str] = None,
+    type: Optional[str] = None,
     category_id: Optional[int] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -26,6 +27,8 @@ async def list_articles(
         query = query.filter(Article.author.ilike(f"%{author}%"))
     if language:
         query = query.filter(Article.language == language)
+    if type:
+        query = query.filter(Article.type == type)
     if category_id:
         query = query.join(Article.categories).filter(ArticleCategory.id == category_id)
     if search:
@@ -129,7 +132,7 @@ async def update_article(
     
     return db_article
 
-@router.delete("/articles/{article_id}")
+@router.delete("/articles/{article_id}", status_code=204)
 async def delete_article(article_id: int, db: Session = Depends(get_db)):
     """Удаление статьи"""
     db_article = db.query(Article).filter(Article.id == article_id).first()
@@ -138,8 +141,6 @@ async def delete_article(article_id: int, db: Session = Depends(get_db)):
     
     db.delete(db_article)
     db.commit()
-    
-    return {"message": "Article deleted successfully"}
 
 @router.get("/{article_id}/increment-views")
 async def increment_views(article_id: int, db: Session = Depends(get_db)):

@@ -20,16 +20,16 @@ describe('Ratings API', () => {
 
     app.post('/ratings', async (req, res) => {
       try {
-        const { content_id, content_type, rating } = req.body;
+        const { content_id: contentId, content_type: contentType, rating } = req.body;
 
         if (rating < 1 || rating > 5) {
           return res.status(400).json({ error: 'Rating must be between 1 and 5' });
         }
 
         const existing = await Rating.findOne({
-          user_id: req.user.id,
-          content_id,
-          content_type
+          userId: req.user.id,
+          contentId,
+          contentType
         });
 
         if (existing) {
@@ -39,9 +39,9 @@ describe('Ratings API', () => {
         }
 
         const newRating = new Rating({
-          user_id: req.user.id,
-          content_id,
-          content_type,
+          userId: req.user.id,
+          contentId,
+          contentType,
           rating
         });
 
@@ -54,7 +54,7 @@ describe('Ratings API', () => {
 
     app.get('/ratings/content/:content_id', async (req, res) => {
       try {
-        const ratings = await Rating.find({ content_id: req.params.content_id });
+        const ratings = await Rating.find({ contentId: parseInt(req.params.content_id) });
         
         if (ratings.length === 0) {
           return res.json({ average: 0, count: 0 });
@@ -125,9 +125,9 @@ describe('Ratings API', () => {
     
     for (let i = 0; i < ratings.length; i++) {
       await Rating.create({
-        user_id: i + 1,
-        content_id: testContentId,
-        content_type: 'article',
+        userId: i + 1,
+        contentId: testContentId,
+        contentType: 'article',
         rating: ratings[i]
       });
     }

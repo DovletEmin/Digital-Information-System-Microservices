@@ -10,7 +10,7 @@ $env:JWT_SECRET = "your-secret-key-here-change-in-production"
 $env:PORT = "8001"
 $env:REDIS_URL = "redis://127.0.0.1:6379/0"
 
-Set-Location "C:\Users\Emin\Desktop\SMU-Microservices\services\auth-service"
+Set-Location "C:\Users\user\Desktop\Digital-Information-System-Microservices\services\auth-service"
 
 Write-Host "Building and running..." -ForegroundColor Yellow
 go run main.go
