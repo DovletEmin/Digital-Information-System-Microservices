@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 from database import get_db
 from models import Dissertation, DissertationCategory
@@ -16,6 +16,7 @@ async def list_dissertations(
     language: Optional[str] = None,
     category_id: Optional[int] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Список диссертаций с пагинацией и фильтрами"""
@@ -32,9 +33,11 @@ async def list_dissertations(
             (Dissertation.title.ilike(f"%{search}%")) | 
             (Dissertation.author.ilike(f"%{search}%"))
         )
+    if sort == "views_desc":
+        query = query.order_by(Dissertation.views.desc())
     
     total = query.count()
-    dissertations = query.offset((page - 1) * per_page).limit(per_page).all()
+    dissertations = query.options(selectinload(Dissertation.categories)).offset((page - 1) * per_page).limit(per_page).all()
     
     items = []
     for diss in dissertations:
@@ -71,9 +74,6 @@ async def get_dissertation(dissertation_id: int, db: Session = Depends(get_db)):
     if not dissertation:
         raise HTTPException(status_code=404, detail="Dissertation not found")
     
-    dissertation.views += 1
-    db.commit()
-    
     return {
         "id": dissertation.id,
         "title": dissertation.title,
@@ -94,7 +94,13 @@ async def get_dissertation(dissertation_id: int, db: Session = Depends(get_db)):
     }
 
 @router.post("/dissertations", status_code=201)
-async def create_dissertation(dissertation: DissertationCreate, db: Session = Depends(get_db)):
+async def create_dissertation(
+    dissertation: DissertationCreate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     db_dissertation = Dissertation(**dissertation.model_dump(exclude={"category_ids"}))
     
     if dissertation.category_ids:
@@ -130,8 +136,11 @@ async def create_dissertation(dissertation: DissertationCreate, db: Session = De
 async def update_dissertation(
     dissertation_id: int,
     dissertation: DissertationUpdate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
     db: Session = Depends(get_db)
 ):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     db_dissertation = db.query(Dissertation).filter(Dissertation.id == dissertation_id).first()
     if not db_dissertation:
         raise HTTPException(status_code=404, detail="Dissertation not found")
@@ -169,7 +178,13 @@ async def update_dissertation(
     }
 
 @router.delete("/dissertations/{dissertation_id}")
-async def delete_dissertation(dissertation_id: int, db: Session = Depends(get_db)):
+async def delete_dissertation(
+    dissertation_id: int,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     db_dissertation = db.query(Dissertation).filter(Dissertation.id == dissertation_id).first()
     if not db_dissertation:
         raise HTTPException(status_code=404, detail="Dissertation not found")

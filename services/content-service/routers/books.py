@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 from database import get_db
 from models import Book, BookCategory, BookReadingProgress
@@ -50,6 +50,7 @@ async def list_books(
     language: Optional[str] = None,
     category_id: Optional[int] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Список книг с пагинацией и фильтрами"""
@@ -66,9 +67,11 @@ async def list_books(
             (Book.title.ilike(f"%{search}%")) | 
             (Book.author.ilike(f"%{search}%"))
         )
+    if sort == "views_desc":
+        query = query.order_by(Book.views.desc())
     
     total = query.count()
-    books = query.offset((page - 1) * per_page).limit(per_page).all()
+    books = query.options(selectinload(Book.categories)).offset((page - 1) * per_page).limit(per_page).all()
     
     items = []
     for book in books:
@@ -109,9 +112,6 @@ async def get_book(book_id: int, db: Session = Depends(get_db)):
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     
-    book.views += 1
-    db.commit()
-    
     return {
         "id": book.id,
         "title": book.title,
@@ -135,7 +135,13 @@ async def get_book(book_id: int, db: Session = Depends(get_db)):
     }
 
 @router.post("/books", status_code=201)
-async def create_book(book: BookCreate, db: Session = Depends(get_db)):
+async def create_book(
+    book: BookCreate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Создание новой книги"""
     db_book = Book(**book.model_dump(exclude={"category_ids"}))
     
@@ -170,7 +176,14 @@ async def create_book(book: BookCreate, db: Session = Depends(get_db)):
     }
 
 @router.put("/books/{book_id}")
-async def update_book(book_id: int, book: BookUpdate, db: Session = Depends(get_db)):
+async def update_book(
+    book_id: int,
+    book: BookUpdate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Обновление книги"""
     db_book = db.query(Book).filter(Book.id == book_id).first()
     if not db_book:
@@ -210,7 +223,13 @@ async def update_book(book_id: int, book: BookUpdate, db: Session = Depends(get_
     }
 
 @router.delete("/books/{book_id}")
-async def delete_book(book_id: int, db: Session = Depends(get_db)):
+async def delete_book(
+    book_id: int,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Удаление книги"""
     db_book = db.query(Book).filter(Book.id == book_id).first()
     if not db_book:

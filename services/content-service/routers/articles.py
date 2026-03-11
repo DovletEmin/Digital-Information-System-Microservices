@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 from database import get_db
 from models import Article, ArticleCategory
@@ -17,6 +17,7 @@ async def list_articles(
     type: Optional[str] = None,
     category_id: Optional[int] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Список статей с пагинацией и фильтрами"""
@@ -36,10 +37,12 @@ async def list_articles(
             (Article.title.ilike(f"%{search}%")) | 
             (Article.author.ilike(f"%{search}%"))
         )
+    if sort == "views_desc":
+        query = query.order_by(Article.views.desc())
     
     # Пагинация
     total = query.count()
-    articles = query.offset((page - 1) * per_page).limit(per_page).all()
+    articles = query.options(selectinload(Article.categories)).offset((page - 1) * per_page).limit(per_page).all()
     
     # Конвертируем в dict для правильной сериализации
     items = []
@@ -78,14 +81,16 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     
-    # Увеличиваем счетчик просмотров
-    article.views += 1
-    db.commit()
-    
     return article
 
 @router.post("/articles", response_model=ArticleResponse, status_code=201)
-async def create_article(article: ArticleCreate, db: Session = Depends(get_db)):
+async def create_article(
+    article: ArticleCreate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Создание новой статьи"""
     try:
         # Создаем статью
@@ -110,8 +115,11 @@ async def create_article(article: ArticleCreate, db: Session = Depends(get_db)):
 async def update_article(
     article_id: int,
     article: ArticleUpdate,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
     db: Session = Depends(get_db)
 ):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Обновление статьи"""
     db_article = db.query(Article).filter(Article.id == article_id).first()
     if not db_article:
@@ -133,7 +141,13 @@ async def update_article(
     return db_article
 
 @router.delete("/articles/{article_id}", status_code=204)
-async def delete_article(article_id: int, db: Session = Depends(get_db)):
+async def delete_article(
+    article_id: int,
+    user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    db: Session = Depends(get_db)
+):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     """Удаление статьи"""
     db_article = db.query(Article).filter(Article.id == article_id).first()
     if not db_article:

@@ -238,7 +238,15 @@ app.get('/api/v1/books/:bookId/download', async (req, res) => {
     res.status(502).json({ error: 'Failed to fetch book content' });
   }
 });
-app.use('/api/v1/articles', createProxyMiddleware({
+// Middleware that requires auth only for mutation methods (POST, PUT, PATCH, DELETE)
+const requireAuthForMutations = (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return authMiddleware(req, res, next);
+  }
+  next();
+};
+
+app.use('/api/v1/articles', requireAuthForMutations, createProxyMiddleware({
   target: services.content,
   changeOrigin: true,
   onError: (err, req, res) => {
@@ -247,6 +255,9 @@ app.use('/api/v1/articles', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
     if (req.body && Object.keys(req.body).length > 0) {
       const bodyData = JSON.stringify(req.body);
       proxyReq.setHeader('Content-Type', 'application/json');
@@ -256,7 +267,7 @@ app.use('/api/v1/articles', createProxyMiddleware({
   }
 }));
 
-app.use('/api/v1/books', createProxyMiddleware({
+app.use('/api/v1/books', requireAuthForMutations, createProxyMiddleware({
   target: services.content,
   changeOrigin: true,
   onError: (err, req, res) => {
@@ -265,28 +276,9 @@ app.use('/api/v1/books', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
-    
-    // Forward auth token as X-User-ID header for authenticated endpoints
-    if (req.headers.authorization) {
-      const token = req.headers.authorization.replace('Bearer ', '');
-      // For progress endpoints, we need to forward the user ID
-      // The auth middleware should have already validated the token
-      if (req.path.includes('/progress')) {
-        // Extract user ID from token if available
-        try {
-          const base64Payload = token.split('.')[1];
-          const payload = Buffer.from(base64Payload, 'base64').toString();
-          const decoded = JSON.parse(payload);
-          if (decoded.user_id) {
-            proxyReq.setHeader('X-User-ID', decoded.user_id);
-          }
-        } catch (e) {
-          // If decoding fails, continue without X-User-ID
-          logger.warn('Failed to decode token for X-User-ID');
-        }
-      }
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
     }
-    
     if (req.body && Object.keys(req.body).length > 0) {
       const bodyData = JSON.stringify(req.body);
       proxyReq.setHeader('Content-Type', 'application/json');
@@ -325,7 +317,7 @@ app.use('/api/v1/books', createProxyMiddleware({
   }
 }));
 
-app.use('/api/v1/dissertations', createProxyMiddleware({
+app.use('/api/v1/dissertations', requireAuthForMutations, createProxyMiddleware({
   target: services.content,
   changeOrigin: true,
   onError: (err, req, res) => {
@@ -334,6 +326,9 @@ app.use('/api/v1/dissertations', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     logger.info(`Proxying ${req.method} ${req.path} to ${services.content}`);
+    if (req.user?.id) {
+      proxyReq.setHeader('X-User-ID', req.user.id);
+    }
     if (req.body && Object.keys(req.body).length > 0) {
       const bodyData = JSON.stringify(req.body);
       proxyReq.setHeader('Content-Type', 'application/json');
@@ -343,7 +338,7 @@ app.use('/api/v1/dissertations', createProxyMiddleware({
   }
 }));
 
-// Saved articles/books/dissertations + highlights (requires auth)
+// Saved articles/books/dissertations
 app.use('/api/v1/saved-articles', authMiddleware, createProxyMiddleware({
   target: services.content,
   changeOrigin: true,
