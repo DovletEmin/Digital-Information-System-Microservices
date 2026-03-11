@@ -238,12 +238,34 @@ app.get('/api/v1/books/:bookId/download', async (req, res) => {
     res.status(502).json({ error: 'Failed to fetch book content' });
   }
 });
-// Middleware that requires auth only for mutation methods (POST, PUT, PATCH, DELETE)
+// Optional auth: validates token and sets req.user if present, never blocks the request
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  try {
+    const token = authHeader.substring(7);
+    const response = await axios.post(
+      `${services.auth}/api/v1/validate`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.valid) {
+      req.user = { id: response.data.user_id, username: response.data.username };
+    }
+  } catch {
+    // Invalid token or auth service down — continue without user
+  }
+  next();
+};
+
+// Middleware that requires auth for mutations; for GET/HEAD optionally identifies user
 const requireAuthForMutations = (req, res, next) => {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return authMiddleware(req, res, next);
   }
-  next();
+  return optionalAuth(req, res, next);
 };
 
 app.use('/api/v1/articles', requireAuthForMutations, createProxyMiddleware({

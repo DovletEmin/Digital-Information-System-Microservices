@@ -22,6 +22,7 @@ export default function BookDetailsPage() {
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [rating, setRating] = useState(0);
   const [myRating, setMyRating] = useState<number | null>(null);
+  const [ratingStats, setRatingStats] = useState({ average: 0, count: 0 });
 
   const ensureAuth = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -58,6 +59,7 @@ export default function BookDetailsPage() {
 
   useEffect(() => {
     fetchBook();
+    loadStats();
   }, [bookId]);
 
   useEffect(() => {
@@ -90,6 +92,15 @@ export default function BookDetailsPage() {
     }
   };
 
+  const loadStats = async () => {
+    try {
+      const stats = await ratingService.getStats('book', bookId);
+      setRatingStats({ average: stats.average ?? 0, count: stats.count ?? 0 });
+    } catch {
+      // leave at 0 if stats not available
+    }
+  };
+
   const checkIfSaved = async () => {
     try {
       const saved = await savedService.checkIfBookSaved(bookId);
@@ -102,10 +113,16 @@ export default function BookDetailsPage() {
   const loadMyRating = async () => {
     try {
       const userRating = await ratingService.getMyRating('book', bookId);
-      setMyRating(userRating);
-      setRating(userRating || 0);
-    } catch (error) {
-      console.error('Failed to load rating:', error);
+      const value = typeof userRating?.rating === 'number' ? userRating.rating : null;
+      setMyRating(value);
+      setRating(value ?? 0);
+    } catch (error: any) {
+      // 404 = user hasn't rated yet — not an error
+      if (error?.response?.status !== 404) {
+        console.error('Failed to load rating:', error);
+      }
+      setMyRating(null);
+      setRating(0);
     }
   };
 
@@ -208,8 +225,8 @@ export default function BookDetailsPage() {
       await ratingService.setRating({ contentType: 'book', contentId: bookId, rating });
       setMyRating(rating);
       setShowRatingDialog(false);
-      // Refresh book data to get updated rating
-      await fetchBook();
+      // Refresh live stats from user-activity service
+      await loadStats();
     } catch (error) {
       console.error('Failed to set rating:', error);
     }
@@ -320,7 +337,7 @@ export default function BookDetailsPage() {
                           key={star}
                           size={20}
                           className={`${
-                            star <= Math.round(book.average_rating)
+                            star <= Math.round(ratingStats.average)
                               ? 'fill-yellow-400 text-yellow-400'
                               : 'text-gray-300'
                           }`}
@@ -328,7 +345,7 @@ export default function BookDetailsPage() {
                       ))}
                     </div>
                     <span className="text-sm text-gray-600">
-                      {book.average_rating.toFixed(1)} ({book.rating_count} baha)
+                      {ratingStats.average.toFixed(1)} ({ratingStats.count} baha)
                     </span>
                   </div>
                   <button
