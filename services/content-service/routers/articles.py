@@ -81,6 +81,10 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     
+    article.views += 1
+    db.commit()
+    db.refresh(article)
+    
     return article
 
 @router.post("/articles", response_model=ArticleResponse, status_code=201)

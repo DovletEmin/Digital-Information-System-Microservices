@@ -41,7 +41,7 @@ def db():
 
 @pytest.fixture
 def client(db):
-    return TestClient(app)
+    return TestClient(app, headers={"X-User-ID": "test-user-123"})
 
 
 @pytest.fixture
