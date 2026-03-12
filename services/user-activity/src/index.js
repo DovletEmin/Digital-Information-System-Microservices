@@ -9,6 +9,7 @@ require('dotenv').config();
 const bookmarkRoutes = require('./routes/bookmarks');
 const ratingRoutes = require('./routes/ratings');
 const viewRoutes = require('./routes/views');
+const analyticsRoutes = require('./routes/analytics');
 const authMiddleware = require('./middleware/auth');
 const optionalAuth = require('./middleware/optionalAuth');
 
@@ -63,6 +64,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/bookmarks', authMiddleware, bookmarkRoutes);
 app.use('/api/v1/ratings', optionalAuth, ratingRoutes);
 app.use('/api/v1/views', viewRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
 
 // User stats endpoint
 app.get('/api/v1/user/stats', authMiddleware, async (req, res) => {
