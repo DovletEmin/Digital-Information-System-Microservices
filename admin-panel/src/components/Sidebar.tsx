@@ -10,7 +10,7 @@ import {
   Folder, 
   LogOut,
   ClipboardList,
-  BarChart2,
+  Users,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -22,7 +22,7 @@ export default function Sidebar() {
     { name: 'Books', href: '/dashboard/books', icon: Book },
     { name: 'Dissertations', href: '/dashboard/dissertations', icon: GraduationCap },
     { name: 'Categories', href: '/dashboard/categories', icon: Folder },
-    { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
+    { name: 'Users', href: '/dashboard/users', icon: Users },
     { name: 'Audit Log', href: '/dashboard/audit-log', icon: ClipboardList },
   ];
 

@@ -107,6 +107,16 @@ app.use('/api/v1/users', createProxyMiddleware({
   }
 }));
 
+// Admin user management - /api/v1/admin/*
+app.use('/api/v1/admin', authMiddleware, createProxyMiddleware({
+  target: services.auth,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Auth service error:', err.message);
+    res.status(503).json({ error: 'Auth service unavailable' });
+  }
+}));
+
 // Content Service Routes - прямой проксинг без изменения пути
 // /api/v1/articles, /api/v1/books, /api/v1/dissertations
 // Special-case streaming endpoints for books (read/download) so we can
