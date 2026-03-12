@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -14,6 +15,35 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 )
+
+// allowedMIMETypes is the whitelist of accepted MIME types.
+var allowedMIMETypes = map[string]bool{
+	"image/jpeg":               true,
+	"image/png":                true,
+	"image/webp":               true,
+	"image/gif":                true,
+	"application/pdf":          true,
+	"application/epub+zip":     true,
+}
+
+// detectMIME reads the first 512 bytes to determine the real MIME type.
+// It returns the MIME type string and a new reader starting from the beginning.
+func detectMIME(src io.Reader) (string, io.Reader, error) {
+	buf := make([]byte, 512)
+	n, err := io.ReadAtLeast(src, buf, 1)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return "", nil, err
+	}
+	buf = buf[:n]
+	mimeType := http.DetectContentType(buf)
+	// Strip parameters like "; charset=utf-8"
+	if idx := strings.Index(mimeType, ";"); idx != -1 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	// Combine the already-read bytes with the rest of the stream
+	combined := io.MultiReader(bytes.NewReader(buf), src)
+	return mimeType, combined, nil
+}
 
 type MediaHandler struct {
 	minioClient *minio.Client
@@ -55,11 +85,21 @@ func (h *MediaHandler) UploadFile(c *gin.Context) {
 	}
 	defer src.Close()
 
-	// Определяем Content-Type
-	contentType := file.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	// Detect and validate actual MIME type (prevents extension spoofing)
+	detectedMIME, combinedReader, err := detectMIME(src)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file content"})
+		return
 	}
+	if !allowedMIMETypes[detectedMIME] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("File type '%s' is not allowed. Accepted types: JPEG, PNG, WebP, GIF, PDF, EPUB.", detectedMIME),
+		})
+		return
+	}
+
+	// Определяем Content-Type
+	contentType := detectedMIME
 
 	// Загружаем в MinIO
 	ctx := context.Background()
@@ -67,7 +107,7 @@ func (h *MediaHandler) UploadFile(c *gin.Context) {
 		ctx,
 		h.config.MinioBucket,
 		filename,
-		src,
+		combinedReader,
 		file.Size,
 		minio.PutObjectOptions{ContentType: contentType},
 	)
@@ -137,15 +177,31 @@ func (h *MediaHandler) UploadMultipleFiles(c *gin.Context) {
 			contentType = "application/octet-stream"
 		}
 
+		// Detect real MIME type and validate
+		detectedMIME, combinedSrc, mimeErr := detectMIME(src)
+		src.Close()
+		if mimeErr != nil {
+			results = append(results, gin.H{"filename": file.Filename, "success": false, "error": "Failed to read file"})
+			continue
+		}
+		if !allowedMIMETypes[detectedMIME] {
+			results = append(results, gin.H{
+				"filename": file.Filename,
+				"success":  false,
+				"error":    fmt.Sprintf("File type '%s' not allowed", detectedMIME),
+			})
+			continue
+		}
+		contentType = detectedMIME
+
 		_, err = h.minioClient.PutObject(
 			ctx,
 			h.config.MinioBucket,
 			filename,
-			src,
+			combinedSrc,
 			file.Size,
 			minio.PutObjectOptions{ContentType: contentType},
 		)
-		src.Close()
 
 		if err != nil {
 			results = append(results, gin.H{
