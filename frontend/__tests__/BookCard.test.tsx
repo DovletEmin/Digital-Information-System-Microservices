@@ -9,16 +9,19 @@ const mockBook: Book = {
   authors_workplace: 'Test University',
   description: 'A test description',
   content: '',
-  thumbnail: null,
-  pdf_file_url: null,
-  epub_file_url: null,
+  thumbnail: undefined,
+  pdf_file_url: undefined,
+  epub_file_url: undefined,
   language: 'tm',
   type: 'local',
   publication_date: '2024-01-15',
   views: 100,
+  rating: 0,
   average_rating: 4.5,
   rating_count: 10,
   categories: [],
+  created_at: '2024-01-15T00:00:00Z',
+  updated_at: '2024-01-15T00:00:00Z',
 };
 
 describe('BookCard', () => {
