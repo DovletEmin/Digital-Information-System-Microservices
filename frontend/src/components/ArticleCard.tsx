@@ -100,13 +100,13 @@ export default function ArticleCard({ article, isSaved: isSavedProp, onSaveToggl
 
   return (
     <Link href={`/articles/${article.id}`}>
-      <article className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer mb-4">
+      <article className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer mb-4">
         <div className="flex flex-col lg:flex-row gap-6 p-6 lg:p-7">
           {/* Content */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 mb-4">
-              <span className="text-gray-900 font-medium">{article.author}</span>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="text-gray-900 dark:text-white font-medium">{article.author}</span>
               <span>•</span>
               <span className="inline-flex items-center text-primary">
                 {/* {article.categories[0]?.name || 'Turkmenistanyň Jemgat hojalygy instituty'} */
@@ -116,18 +116,18 @@ export default function ArticleCard({ article, isSaved: isSavedProp, onSaveToggl
             </div>
 
             {/* Title */}
-            <h3 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-4 pb-1 leading-snug line-clamp-2 hover:text-primary transition-colors">
+            <h3 className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white mb-4 pb-1 leading-snug line-clamp-2 hover:text-primary transition-colors">
               {article.title}
             </h3>
 
             {/* Excerpt */}
-            <p className="text-base text-gray-600 mb-6 line-clamp-2 leading-relaxed">
+            <p className="text-base text-gray-600 dark:text-gray-300 mb-6 line-clamp-2 leading-relaxed">
               {truncateText(article.content, 220)}
             </p>
 
             {/* Footer */}
             <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 {article.publication_date && (
                   <span>{formatDate(article.publication_date)}</span>
                 )}
@@ -145,7 +145,7 @@ export default function ArticleCard({ article, isSaved: isSavedProp, onSaveToggl
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   isSaved
                     ? 'bg-primary text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
                 }`}
               >
                 <Bookmark size={16} />
@@ -156,7 +156,7 @@ export default function ArticleCard({ article, isSaved: isSavedProp, onSaveToggl
 
           {/* Image */}
           {article.thumbnail && (
-            <div className="w-full lg:w-64 xl:w-72 aspect-[4/3] flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 lg:order-last">
+            <div className="w-full lg:w-64 xl:w-72 aspect-[4/3] flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 lg:order-last">
               <img
                 src={article.thumbnail}
                 alt={article.title}
