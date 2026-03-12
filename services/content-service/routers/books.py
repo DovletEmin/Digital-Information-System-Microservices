@@ -5,6 +5,7 @@ from typing import List, Optional
 from database import get_db
 from models import Book, BookCategory, BookReadingProgress
 from schemas import BookCreate, BookUpdate, BookResponse, BookReadingProgressCreate, BookReadingProgressUpdate, BookReadingProgressResponse
+from cache import get_cache, set_cache, invalidate_cache
 import math
 import httpx
 import io
@@ -54,6 +55,13 @@ async def list_books(
     db: Session = Depends(get_db)
 ):
     """Список книг с пагинацией и фильтрами"""
+    cache_key = (
+        f"books:list:{page}:{per_page}:{author}:{language}:{category_id}:{search}:{sort}"
+    )
+    cached = get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     query = db.query(Book)
     
     if author:
@@ -97,22 +105,37 @@ async def list_books(
             "updated_at": book.updated_at
         })
     
-    return {
+    result = {
         "items": items,
         "total": total,
         "page": page,
         "per_page": per_page,
         "pages": math.ceil(total / per_page)
     }
+    set_cache(cache_key, result, ttl=300)
+    return result
 
 @router.get("/books/{book_id}")
 async def get_book(book_id: int, db: Session = Depends(get_db)):
     """Получение книги по ID"""
+    item_cache_key = f"books:item:{book_id}"
+    cached = get_cache(item_cache_key)
+    if cached is not None:
+        book = db.query(Book).filter(Book.id == book_id).first()
+        if book:
+            book.views += 1
+            db.commit()
+        return cached
+
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     
-    return {
+    book.views += 1
+    db.commit()
+    db.refresh(book)
+
+    book_data = {
         "id": book.id,
         "title": book.title,
         "author": book.author,
@@ -133,6 +156,8 @@ async def get_book(book_id: int, db: Session = Depends(get_db)):
         "created_at": book.created_at,
         "updated_at": book.updated_at
     }
+    set_cache(item_cache_key, book_data, ttl=600)
+    return book_data
 
 @router.post("/books", status_code=201)
 async def create_book(
@@ -153,7 +178,7 @@ async def create_book(
     db.commit()
     db.refresh(db_book)
     
-    return {
+    book_resp = {
         "id": db_book.id,
         "title": db_book.title,
         "author": db_book.author,
@@ -174,6 +199,8 @@ async def create_book(
         "created_at": db_book.created_at,
         "updated_at": db_book.updated_at
     }
+    invalidate_cache("books:list:*")
+    return book_resp
 
 @router.put("/books/{book_id}")
 async def update_book(
@@ -200,7 +227,7 @@ async def update_book(
     db.commit()
     db.refresh(db_book)
     
-    return {
+    update_resp = {
         "id": db_book.id,
         "title": db_book.title,
         "author": db_book.author,
@@ -221,6 +248,9 @@ async def update_book(
         "created_at": db_book.created_at,
         "updated_at": db_book.updated_at
     }
+    invalidate_cache("books:list:*")
+    invalidate_cache(f"books:item:{book_id}")
+    return update_resp
 
 @router.delete("/books/{book_id}")
 async def delete_book(
@@ -237,7 +267,8 @@ async def delete_book(
     
     db.delete(db_book)
     db.commit()
-    
+    invalidate_cache("books:list:*")
+    invalidate_cache(f"books:item:{book_id}")
     return {"message": "Book deleted successfully"}
 
 # Reading Progress endpoints

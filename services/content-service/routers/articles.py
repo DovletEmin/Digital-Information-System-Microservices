@@ -4,6 +4,7 @@ from typing import List, Optional
 from database import get_db
 from models import Article, ArticleCategory
 from schemas import ArticleCreate, ArticleUpdate, ArticleResponse
+from cache import get_cache, set_cache, invalidate_cache
 import math
 
 router = APIRouter()
@@ -21,6 +22,14 @@ async def list_articles(
     db: Session = Depends(get_db)
 ):
     """Список статей с пагинацией и фильтрами"""
+    cache_key = (
+        f"articles:list:{page}:{per_page}:{author}:{language}:{type}:"
+        f"{category_id}:{search}:{sort}"
+    )
+    cached = get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     query = db.query(Article)
     
     # Фильтры
@@ -66,17 +75,29 @@ async def list_articles(
             "updated_at": article.updated_at
         })
     
-    return {
+    result = {
         "items": items,
         "total": total,
         "page": page,
         "per_page": per_page,
         "pages": math.ceil(total / per_page)
     }
+    set_cache(cache_key, result, ttl=300)
+    return result
 
 @router.get("/articles/{article_id}", response_model=ArticleResponse)
 async def get_article(article_id: int, db: Session = Depends(get_db)):
     """Получение статьи по ID"""
+    cache_key = f"articles:item:{article_id}"
+    cached = get_cache(cache_key)
+    if cached is not None:
+        # Still increment view count in background but return cached data
+        article = db.query(Article).filter(Article.id == article_id).first()
+        if article:
+            article.views += 1
+            db.commit()
+        return cached
+
     article = db.query(Article).filter(Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -85,6 +106,7 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(article)
     
+    set_cache(cache_key, article, ttl=600)
     return article
 
 @router.post("/articles", response_model=ArticleResponse, status_code=201)
@@ -108,7 +130,7 @@ async def create_article(
         db.add(db_article)
         db.commit()
         db.refresh(db_article)
-        
+        invalidate_cache("articles:list:*")
         return db_article
     except Exception as e:
         db.rollback()
@@ -141,7 +163,8 @@ async def update_article(
     
     db.commit()
     db.refresh(db_article)
-    
+    invalidate_cache("articles:list:*")
+    invalidate_cache(f"articles:item:{article_id}")
     return db_article
 
 @router.delete("/articles/{article_id}", status_code=204)
@@ -159,6 +182,8 @@ async def delete_article(
     
     db.delete(db_article)
     db.commit()
+    invalidate_cache("articles:list:*")
+    invalidate_cache(f"articles:item:{article_id}")
 
 @router.get("/{article_id}/increment-views")
 async def increment_views(article_id: int, db: Session = Depends(get_db)):
