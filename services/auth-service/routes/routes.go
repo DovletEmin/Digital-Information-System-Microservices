@@ -35,6 +35,7 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
 		admin.Use(authHandler.AuthMiddleware(), authHandler.AdminMiddleware())
 		{
 			admin.GET("/users", authHandler.ListUsers)
+			admin.POST("/users", authHandler.CreateAdminUser)
 			admin.GET("/users/:id", authHandler.GetUser)
 			admin.PUT("/users/:id", authHandler.UpdateUser)
 			admin.DELETE("/users/:id", authHandler.DeleteUser)

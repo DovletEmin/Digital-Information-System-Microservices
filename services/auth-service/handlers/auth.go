@@ -291,6 +291,61 @@ func (h *AuthHandler) UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, toUserResponse(&user))
 }
 
+// CreateAdminUser - создание пользователя администратором (с выбором прав)
+func (h *AuthHandler) CreateAdminUser(c *gin.Context) {
+	var req struct {
+		Username  string `json:"username" binding:"required,min=3,max=50"`
+		Email     string `json:"email" binding:"required,email"`
+		Password  string `json:"password" binding:"required,min=6"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		IsActive  *bool  `json:"is_active"`
+		IsStaff   *bool  `json:"is_staff"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var existing models.User
+	if err := h.db.Where("username = ? OR email = ?", req.Username, req.Email).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username or email already exists"})
+		return
+	}
+
+	hashedPassword, err := utils.HashPassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+	isStaff := false
+	if req.IsStaff != nil {
+		isStaff = *req.IsStaff
+	}
+
+	user := models.User{
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  hashedPassword,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		IsActive:  isActive,
+		IsStaff:   isStaff,
+	}
+
+	if err := h.db.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, toUserResponse(&user))
+}
+
 // DeleteUser - удаление пользователя (admin)
 func (h *AuthHandler) DeleteUser(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))

@@ -24,6 +24,16 @@ export interface UpdateUserPayload {
   is_staff?: boolean;
 }
 
+export interface CreateUserPayload {
+  username: string;
+  email: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+  is_active?: boolean;
+  is_staff?: boolean;
+}
+
 export const userService = {
   getUsersCount: async () => {
     const { data } = await api.get<UserCountResponse>('/api/v1/users/count');
@@ -31,6 +41,10 @@ export const userService = {
   },
   listUsers: async (): Promise<AdminUser[]> => {
     const { data } = await api.get<AdminUser[]>('/api/v1/admin/users');
+    return data;
+  },
+  createUser: async (payload: CreateUserPayload): Promise<AdminUser> => {
+    const { data } = await api.post<AdminUser>('/api/v1/admin/users', payload);
     return data;
   },
   updateUser: async (id: number, payload: UpdateUserPayload): Promise<AdminUser> => {
