@@ -5,6 +5,11 @@ from elasticsearch import Elasticsearch, NotFoundError
 from typing import List, Optional
 import os
 import uvicorn
+import asyncio
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Search Service API",
@@ -78,6 +83,9 @@ async def startup_event():
         print("Elasticsearch indexes ready")
     except Exception as e:
         print(f"Error initializing Elasticsearch: {e}")
+
+    # Start RabbitMQ consumer in background
+    asyncio.create_task(_rabbitmq_consumer())
 
 
 @app.get("/health")
@@ -272,47 +280,241 @@ async def delete_from_index(
 
 @app.get("/api/v1/suggest")
 async def autocomplete(
-    q: str = Query(..., description="Частичный запрос"),
-    content_type: Optional[str] = Query(None)
+    q: str = Query(..., min_length=1, description="Частичный запрос"),
+    content_type: Optional[str] = Query(None),
+    language: Optional[str] = Query(None),
+    limit: int = Query(8, ge=1, le=20),
 ):
-    """Автодополнение для поиска"""
+    """Autocomplete suggestions — returns unique titles and authors matching the prefix."""
     try:
         indices = [ARTICLES_INDEX, BOOKS_INDEX, DISSERTATIONS_INDEX]
-        if content_type:
-            if content_type == "article":
-                indices = [ARTICLES_INDEX]
-            elif content_type == "book":
-                indices = [BOOKS_INDEX]
-            elif content_type == "dissertation":
-                indices = [DISSERTATIONS_INDEX]
+        if content_type == "article":
+            indices = [ARTICLES_INDEX]
+        elif content_type == "book":
+            indices = [BOOKS_INDEX]
+        elif content_type == "dissertation":
+            indices = [DISSERTATIONS_INDEX]
 
-        response = es.search(
-            index=",".join(indices),
-            body={
-                "query": {
-                    "multi_match": {
-                        "query": q,
-                        "fields": ["title^3", "author^2"],
-                        "type": "phrase_prefix"
-                    }
-                },
-                "size": 10,
-                "_source": ["title", "author"]
-            }
-        )
+        body: dict = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": q,
+                                "fields": ["title^3", "author^2"],
+                                "type": "phrase_prefix",
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": limit,
+            "_source": ["id", "title", "author", "language", "thumbnail"],
+        }
+        if language:
+            body["query"]["bool"]["filter"] = [{"term": {"language": language}}]
 
+        response = es.search(index=",".join(indices), body=body)
+
+        seen_titles: set = set()
         suggestions = []
         for hit in response["hits"]["hits"]:
-            suggestions.append({
-                "title": hit["_source"]["title"],
-                "author": hit["_source"]["author"],
-                "type": hit["_index"]
-            })
+            src = hit["_source"]
+            title = src.get("title", "")
+            if title not in seen_titles:
+                seen_titles.add(title)
+                suggestions.append(
+                    {
+                        "id": src.get("id"),
+                        "title": title,
+                        "author": src.get("author", ""),
+                        "language": src.get("language", "tm"),
+                        "thumbnail": src.get("thumbnail"),
+                        "content_type": hit["_index"],
+                    }
+                )
 
-        return {"suggestions": suggestions}
+        return {"query": q, "suggestions": suggestions}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Suggestion error: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Suggestion error: {str(exc)}")
+
+
+@app.get("/api/v1/search/facets")
+async def faceted_search(
+    q: Optional[str] = Query(None, description="Опциональный поисковый запрос"),
+    content_type: Optional[str] = Query(None),
+    language: Optional[str] = Query(None),
+):
+    """
+    Return aggregated facets: languages, content types, publication years.
+    Useful for building filter sidebars on the frontend.
+    """
+    try:
+        indices = [ARTICLES_INDEX, BOOKS_INDEX, DISSERTATIONS_INDEX]
+        if content_type == "article":
+            indices = [ARTICLES_INDEX]
+        elif content_type == "book":
+            indices = [BOOKS_INDEX]
+        elif content_type == "dissertation":
+            indices = [DISSERTATIONS_INDEX]
+
+        filters = []
+        if language:
+            filters.append({"term": {"language": language}})
+
+        base_query: dict
+        if q:
+            base_query = {
+                "bool": {
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": q,
+                                "fields": ["title^3", "author^2", "content"],
+                                "type": "best_fields",
+                                "fuzziness": "AUTO",
+                            }
+                        }
+                    ]
+                }
+            }
+        else:
+            base_query = {"match_all": {}}
+
+        if filters:
+            base_query.setdefault("bool", {}).setdefault("filter", []).extend(filters)
+
+        body = {
+            "query": base_query,
+            "size": 0,
+            "aggs": {
+                "by_language": {
+                    "terms": {"field": "language", "size": 10}
+                },
+                "by_content_type": {
+                    "terms": {"field": "_index", "size": 5}
+                },
+                "by_year": {
+                    "date_histogram": {
+                        "field": "created_at",
+                        "calendar_interval": "year",
+                        "format": "yyyy",
+                        "min_doc_count": 1,
+                    }
+                },
+            },
+        }
+
+        response = es.search(index=",".join(indices), body=body)
+        aggs = response.get("aggregations", {})
+
+        def _buckets(key: str):
+            return [
+                {"value": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(key, {}).get("buckets", [])
+            ]
+
+        year_buckets = [
+            {"value": b["key_as_string"], "count": b["doc_count"]}
+            for b in aggs.get("by_year", {}).get("buckets", [])
+        ]
+
+        return {
+            "total": response["hits"]["total"]["value"],
+            "facets": {
+                "languages": _buckets("by_language"),
+                "content_types": _buckets("by_content_type"),
+                "years": year_buckets,
+            },
+        }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Facets error: {str(exc)}")
+
+
+# ------------------------------------------------------------------ #
+# RabbitMQ consumer — runs as a background task on startup            #
+# ------------------------------------------------------------------ #
+
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+_CONTENT_TYPE_MAP = {
+    "article": ARTICLES_INDEX,
+    "book": BOOKS_INDEX,
+    "dissertation": DISSERTATIONS_INDEX,
+}
+
+
+async def _rabbitmq_consumer():
+    """
+    Consume content.* events from RabbitMQ and keep the Elasticsearch
+    index in sync.  Events expected on exchange 'content' (topic):
+      content.article.created / updated / deleted
+      content.book.created   / updated / deleted
+      content.dissertation.created / updated / deleted
+    """
+    try:
+        import aio_pika  # type: ignore
+    except ImportError:
+        logger.warning("aio_pika not installed — RabbitMQ sync disabled.")
+        return
+
+    retry_delay = 5
+    while True:
+        try:
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            channel = await connection.channel()
+            exchange = await channel.declare_exchange(
+                "content", aio_pika.ExchangeType.TOPIC, durable=True
+            )
+            queue = await channel.declare_queue("search_index_sync", durable=True)
+            await queue.bind(exchange, routing_key="content.#")
+            logger.info("RabbitMQ consumer connected and listening on content.#")
+
+            async with queue.iterator() as q_iter:
+                async for message in q_iter:
+                    async with message.process():
+                        try:
+                            routing_key = message.routing_key or ""
+                            # e.g. "content.article.created"
+                            parts = routing_key.split(".")
+                            if len(parts) != 3:
+                                continue
+                            _, entity_type, action = parts
+                            index = _CONTENT_TYPE_MAP.get(entity_type)
+                            if index is None:
+                                continue
+
+                            payload = json.loads(message.body.decode())
+                            doc_id = payload.get("id")
+                            if doc_id is None:
+                                continue
+
+                            if action == "deleted":
+                                try:
+                                    es.delete(index=index, id=doc_id)
+                                    logger.debug("Deleted %s/%s from ES", index, doc_id)
+                                except NotFoundError:
+                                    pass
+                            elif action == "created":
+                                es.index(index=index, id=doc_id, body=payload)
+                                logger.debug("Indexed %s/%s in ES", index, doc_id)
+                            elif action == "updated":
+                                try:
+                                    es.update(index=index, id=doc_id, body={"doc": payload})
+                                except NotFoundError:
+                                    es.index(index=index, id=doc_id, body=payload)
+                                logger.debug("Updated %s/%s in ES", index, doc_id)
+                        except Exception as msg_exc:
+                            logger.warning("Error processing message: %s", msg_exc)
+
+        except Exception as conn_exc:
+            logger.warning(
+                "RabbitMQ connection failed (%s), retrying in %ds…", conn_exc, retry_delay
+            )
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 60)
 
 
 @app.post("/api/v1/reindex")
