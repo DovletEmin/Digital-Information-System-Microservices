@@ -25,6 +25,16 @@ export default function DissertationPage() {
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [rating, setRating] = useState(0);
   const [myRating, setMyRating] = useState<number | null>(null);
+  const [fontSize, setFontSize] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('reader-font-size');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 12 && parsed <= 24) return parsed;
+      }
+    }
+    return 16;
+  });
 
   const ensureAuth = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -82,6 +92,10 @@ export default function DissertationPage() {
     loadHighlights();
     loadMyRating();
   }, [authToken, dissertationId]);
+
+  useEffect(() => {
+    localStorage.setItem('reader-font-size', fontSize.toString());
+  }, [fontSize]);
 
   const fetchDissertation = async () => {
     try {
@@ -428,9 +442,43 @@ export default function DissertationPage() {
             </div>
           )}
 
+          {/* Reading Controls */}
+          <div className="flex items-center justify-between mb-6 pb-4 border-b">
+            <span className="text-sm text-gray-400">Ýazuw ölçegi:</span>
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                disabled={fontSize <= 12}
+                className="px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-gray-200"
+                title="Kiçelt"
+              >
+                A−
+              </button>
+              <button
+                onClick={() => setFontSize(16)}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  fontSize === 16 ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+                title="Adaty ölçeg"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setFontSize(prev => Math.min(24, prev + 2))}
+                disabled={fontSize >= 24}
+                className="px-3 py-2 text-base font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-l border-gray-200"
+                title="Ulalt"
+              >
+                A+
+              </button>
+            </div>
+          </div>
+
+          {/* Dissertation Body */}
           <div
             id="dissertation-content"
             className="prose prose-lg max-w-none"
+            style={{ fontSize: `${fontSize}px`, textAlign: 'justify', hyphens: 'auto' } as React.CSSProperties}
             onMouseUp={handleTextSelection}
             dangerouslySetInnerHTML={{ __html: applyHighlights(dissertation.content) }}
           />
