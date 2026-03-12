@@ -3,17 +3,23 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { articleService } from '@/services/articleService';
 import { categoryService } from '@/services/categoryService';
 import { CreateArticleDto, Category } from '@/types';
 import ImageUpload from '@/components/ImageUpload';
+import { articleSchema, ArticleFormData } from '@/lib/validationSchemas';
+import { logAudit } from '@/lib/auditLog';
 
 export default function NewArticlePage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateArticleDto>();
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ArticleFormData>({
+    resolver: zodResolver(articleSchema),
+    defaultValues: { language: 'tm', type: 'local' },
+  });
 
   useEffect(() => {
     fetchCategories();
@@ -78,7 +84,8 @@ export default function NewArticlePage() {
         type: data.type || 'local',
       };
       
-      await articleService.create(formattedData);
+      const created = await articleService.create(formattedData);
+      logAudit('create', 'article', { entityId: String(created?.id ?? ''), entityTitle: formattedData.title });
       router.push('/dashboard/articles');
     } catch (error) {
       console.error('Failed to create article:', error);

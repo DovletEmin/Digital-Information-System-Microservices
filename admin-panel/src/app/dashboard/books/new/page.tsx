@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { bookService } from '@/services/bookService';
 import { categoryService } from '@/services/categoryService';
 import { CreateBookDto, Category } from '@/types';
 import ImageUpload from '@/components/ImageUpload';
 import FileUpload from '@/components/FileUpload';
+import { bookSchema, BookFormData } from '@/lib/validationSchemas';
+import { logAudit } from '@/lib/auditLog';
 
 export default function NewBookPage() {
   const router = useRouter();
@@ -17,7 +20,10 @@ export default function NewBookPage() {
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
   const [pdfFileUrl, setPdfFileUrl] = useState<string>('');
   const [epubFileUrl, setEpubFileUrl] = useState<string>('');
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CreateBookDto>();
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<BookFormData>({
+    resolver: zodResolver(bookSchema),
+    defaultValues: { language: 'tm', type: 'local' },
+  });
 
   useEffect(() => {
     fetchCategories();
@@ -90,7 +96,8 @@ export default function NewBookPage() {
         type: data.type || 'local',
       };
       
-      await bookService.create(formattedData);
+      const created = await bookService.create(formattedData);
+      logAudit('create', 'book', { entityId: String(created?.id ?? ''), entityTitle: formattedData.title });
       router.push('/dashboard/books');
     } catch (error) {
       console.error('Failed to create book:', error);
