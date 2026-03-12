@@ -114,6 +114,15 @@ app.use('/api/v1/admin', authMiddleware, createProxyMiddleware({
   onError: (err, req, res) => {
     logger.error('Auth service error:', err.message);
     res.status(503).json({ error: 'Auth service unavailable' });
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    logger.info(`Proxying ${req.method} ${req.path} to ${services.auth}`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   }
 }));
 
