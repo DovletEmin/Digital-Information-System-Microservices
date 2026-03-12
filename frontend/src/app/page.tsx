@@ -9,6 +9,10 @@ import { ratingService } from '@/services/ratingService';
 import { savedService } from '@/services/savedService';
 import { Article, Category } from '@/types';
 import ArticleCard from '@/components/ArticleCard';
+import SkeletonCard from '@/components/SkeletonCard';
+import EmptyState from '@/components/EmptyState';
+import Pagination from '@/components/Pagination';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function HomePage() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -144,7 +148,7 @@ export default function HomePage() {
   );
 
   return (
-    <div className="bg-background min-h-screen">
+    <div className="bg-background dark:bg-gray-950 min-h-screen">
       <div className="container-custom py-8">
         {/* Tabs */}
         <div className="flex justify-center gap-3 mb-8">
@@ -152,8 +156,8 @@ export default function HomePage() {
             onClick={() => setActiveTab('makalalar')}
             className={`px-6 py-2 rounded-full text-sm font-medium transition-colors ${
               activeTab === 'makalalar'
-                ? 'bg-white border-2 border-gray-900 text-gray-900'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-white dark:bg-gray-800 border-2 border-gray-900 dark:border-gray-400 text-gray-900 dark:text-white'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
             Makalalar
@@ -187,12 +191,12 @@ export default function HomePage() {
                 placeholder="Gözleg"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-base"
+                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-base"
               />
             </div>
             <button
               type="button"
-              className="p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="p-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               aria-label="Filters"
               onClick={openFilters}
             >
@@ -270,63 +274,47 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold text-gray-900">Iň köp okalanlar</h2>
           </div>
 
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-300 border-t-primary"></div>
-            </div>
-          ) : filteredArticles.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
-              Hiç zat tapylmady
-            </div>
-          ) : (
-            <div className="space-y-10">
-              {filteredArticles.map((article) => (
-                <ArticleCard
-                  key={article.id}
-                  article={article}
-                  isSaved={savedArticleIds.has(article.id)}
-                  onSaveToggle={(newState) => {
-                    setSavedArticleIds((prev) => {
-                      const next = new Set(prev);
-                      if (newState) next.add(article.id);
-                      else next.delete(article.id);
-                      return next;
-                    });
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <ErrorBoundary>
+            {loading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : filteredArticles.length === 0 ? (
+              <EmptyState
+                title="Hiç zat tapylmady"
+                description="Başga gözleg sözlerini ýa-da filtrleri synap görüň."
+              />
+            ) : (
+              <div className="space-y-10">
+                {filteredArticles.map((article) => (
+                  <ArticleCard
+                    key={article.id}
+                    article={article}
+                    isSaved={savedArticleIds.has(article.id)}
+                    onSaveToggle={(newState) => {
+                      setSavedArticleIds((prev) => {
+                        const next = new Set(prev);
+                        if (newState) next.add(article.id);
+                        else next.delete(article.id);
+                        return next;
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-3 mt-10">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Öňki
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-700">
-                Sahypa {page} / {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Indiki
-              </button>
-            </div>
-          )}
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </ErrorBoundary>
         </div>
       </div>
 
       {showFilters && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowFilters(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-xl p-6">
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-xl p-6">
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Dili:</p>
