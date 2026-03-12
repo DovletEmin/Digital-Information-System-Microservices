@@ -8,7 +8,9 @@ import {
   Book, 
   GraduationCap, 
   Folder, 
-  LogOut 
+  LogOut,
+  ClipboardList,
+  BarChart2,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -20,6 +22,8 @@ export default function Sidebar() {
     { name: 'Books', href: '/dashboard/books', icon: Book },
     { name: 'Dissertations', href: '/dashboard/dissertations', icon: GraduationCap },
     { name: 'Categories', href: '/dashboard/categories', icon: Folder },
+    { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
+    { name: 'Audit Log', href: '/dashboard/audit-log', icon: ClipboardList },
   ];
 
   const handleLogout = () => {
