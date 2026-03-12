@@ -612,9 +612,7 @@ export default function BookReadPage() {
           <div className="flex-1 text-center px-4">
             <h1 className="text-sm sm:text-base font-medium text-gray-900 truncate">{book.title}</h1>
           </div>
-          <div className="pr-4">
-            <button onClick={openPreferred} className="px-3 py-2 bg-blue-600 text-white rounded-lg">Open / Read</button>
-          </div>
+
         </div>
       </div>
 

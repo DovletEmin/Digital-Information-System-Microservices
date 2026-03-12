@@ -616,6 +616,16 @@ app.use('/api/v1/views', createProxyMiddleware({
   }
 }));
 
+// User Activity - analytics endpoints
+app.use('/api/v1/analytics', authMiddleware, createProxyMiddleware({
+  target: services.activity,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    logger.error('Activity service error:', err.message);
+    res.status(503).json({ error: 'Activity service unavailable' });
+  }
+}));
+
 // Media Service Routes
 app.use('/api/v1/media', createProxyMiddleware({
   target: services.media,

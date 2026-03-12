@@ -91,22 +91,41 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
     cache_key = f"articles:item:{article_id}"
     cached = get_cache(cache_key)
     if cached is not None:
-        # Still increment view count in background but return cached data
+        # Still increment view count but return the cached dict directly
         article = db.query(Article).filter(Article.id == article_id).first()
         if article:
             article.views += 1
             db.commit()
         return cached
 
-    article = db.query(Article).filter(Article.id == article_id).first()
+    article = db.query(Article).options(selectinload(Article.categories)).filter(Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
-    
+
     article.views += 1
     db.commit()
     db.refresh(article)
-    
-    set_cache(cache_key, article, ttl=600)
+
+    # Serialize to a plain dict so json.dumps can handle it correctly
+    article_dict = {
+        "id": article.id,
+        "title": article.title,
+        "author": article.author,
+        "authors_workplace": article.authors_workplace,
+        "thumbnail": article.thumbnail,
+        "content": article.content,
+        "publication_date": article.publication_date,
+        "language": article.language,
+        "type": article.type,
+        "views": article.views,
+        "rating": article.rating,
+        "average_rating": article.average_rating,
+        "rating_count": article.rating_count,
+        "categories": [{"id": c.id, "name": c.name} for c in article.categories],
+        "created_at": article.created_at,
+        "updated_at": article.updated_at,
+    }
+    set_cache(cache_key, article_dict, ttl=600)
     return article
 
 @router.post("/articles", response_model=ArticleResponse, status_code=201)

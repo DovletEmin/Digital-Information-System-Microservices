@@ -3,7 +3,6 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AuthProvider } from "@/context/AuthContext";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/highlight/lib/styles/index.css';
 import Script from 'next/script';
@@ -50,15 +49,13 @@ export default function RootLayout({
         <Script id="remove-bis-skin" strategy="beforeInteractive">
           {`(function(){try{var a='bis_skin_checked';document.querySelectorAll('['+a+']').forEach(function(e){e.removeAttribute(a)});}catch(e){} })();`}
         </Script>
-        <ThemeProvider>
-          <AuthProvider>
-            <Header />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <Header />
+          <main className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Bookmark, LogOut } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
-import DarkModeToggle from './DarkModeToggle';
 
 export default function Header() {
   const { user, clearUser } = useAuth();
@@ -41,7 +40,6 @@ export default function Header() {
           </Link>
 
           <div className="flex items-center space-x-2">
-            <DarkModeToggle />
             <button
               onClick={handleBookmarksClick}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
